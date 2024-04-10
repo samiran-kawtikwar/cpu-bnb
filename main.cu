@@ -51,7 +51,9 @@ int main(int argc, char **argv)
   Log(info, "LAP solved succesfully, objective %u\n", (uint)UB);
   lap->print_solution();
   delete lap;
+
   Log(debug, "Solving LAP with Branching");
+  Timer t = Timer();
 
   // Define a heap from the standard queue package
   std::priority_queue<node, std::vector<node>, std::greater<node>> heap;
@@ -60,21 +62,25 @@ int main(int argc, char **argv)
   stats.nodes_pruned = 0;
   stats.max_heap_size = 0;
 
-  node_info *root_info = new node_info();
+  node_info *root_info = new node_info(psize);
   root_info->LB = 0;
-  root_info->level = 1;
+  root_info->level = 0;
   node root = node(0, root_info);
   heap.push(root);
   stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
   // start branch and bound
   bool optimal = false;
-  node best_node;
+  node opt_node = node(0, new node_info(psize));
+  // uint iter = 0;
   do
   {
+    // Log(debug, "Starting iteration# %u", iter++);
     // get the best node from the heap
-    best_node = heap.top();
+    node best_node = node(0, new node_info(psize));
+    best_node.copy(heap.top(), psize);
     heap.pop();
     stats.nodes_explored++;
+    // Log(info, "best node key %u", (uint)best_node.key);
 
     // Update bound of the best node
     best_node.value->LB = 0;
@@ -89,11 +95,12 @@ int main(int argc, char **argv)
     uint level = best_node.value->level;
     if (best_node.key < UB)
     {
+
       // Branch on the best node to create (psize - level) new children nodes
       for (uint i = 0; i < psize - level; i++)
       {
         // Create a new child node
-        node_info *child_info = new node_info();
+        node_info *child_info = new node_info(psize);
         child_info->LB = best_node.value->LB;
         child_info->level = level + 1;
         for (uint j = 0; j < psize; j++)
@@ -105,9 +112,11 @@ int main(int argc, char **argv)
         uint counter = 0;
         for (uint index = 0; index < psize; index++)
         {
-          if (counter == i)
+          if (counter == i && child_info->fixed_assignments[index] == -1)
           {
+            // Log(debug, "Code reached here\n");
             child_info->fixed_assignments[index] = level;
+
             break;
           }
           if (child_info->fixed_assignments[index] == -1)
@@ -123,6 +132,7 @@ int main(int argc, char **argv)
     {
       optimal = true;
       Log(critical, "Optimality Reached");
+      opt_node.copy(best_node, psize);
       break;
     }
     else
@@ -130,18 +140,21 @@ int main(int argc, char **argv)
       // Prune the node
       stats.nodes_pruned++;
     }
-    delete best_node.value;
   } while (!optimal || !heap.empty());
 
   if (optimal)
   {
-    Log(critical, "Optimal solution found with objective %u", (uint)best_node.key);
+    Log(critical, "Optimal solution found with objective %u", (uint)opt_node.key);
   }
   else
   {
     Log(critical, "Optimal solution not found");
   }
-  Log(info, "Nodes explored %u", stats.nodes_explored);
-  Log(info, "Nodes pruned %u", stats.nodes_pruned);
-  Log(info, "Max heap size %u", stats.max_heap_size);
+  Log(info, "Max heap size during execution: %lu", stats.max_heap_size);
+  Log(info, "Nodes explored: %u, Pruned: %u", stats.nodes_explored, stats.nodes_pruned);
+
+  delete[] h_costs;
+  CUDA_RUNTIME(cudaFree(d_costs));
+  Log(info, "Exiting program");
+  Log(info, "Total time taken: %f sec", t.elapsed());
 }
