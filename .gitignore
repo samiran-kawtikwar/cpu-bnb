@@ -37,3 +37,6 @@ bin/**
 scripts/**
 logs/**
 *.log
+
+#vscode
+.vscode/**
