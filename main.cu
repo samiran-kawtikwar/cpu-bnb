@@ -5,11 +5,14 @@
 #include "utils/cuda_utils.cuh"
 #include "utils/timer.h"
 #include "defs.cuh"
-#include "LAP/config.h"
-#include "LAP/cost_generator.h"
 #include "LAP/device_utils.cuh"
 #include "LAP/Hung_lap.cuh"
 #include "LAP/lap_kernels.cuh"
+
+#include "RCAP/config.h"
+#include "RCAP/cost_generator.h"
+#include "RCAP/gurobi_solver.h"
+#include "RCAP/rcap_functions.cuh"
 
 #include <queue>
 
@@ -20,6 +23,8 @@ int main(int argc, char **argv)
   printConfig(config);
   int dev_ = config.deviceId;
   uint psize = config.user_n;
+  uint ncommodities = config.user_ncommodities;
+
   if (psize > 100)
   {
     Log(critical, "Problem size too large, Implementation not ready yet. Use problem size <= 100");
@@ -28,39 +33,45 @@ int main(int argc, char **argv)
   CUDA_RUNTIME(cudaDeviceReset());
   CUDA_RUNTIME(cudaSetDevice(dev_));
 
-  cost_type *h_costs = generate_cost<cost_type>(config, config.seed);
+  problem_info *h_problem_info = generate_problem<cost_type>(config, config.seed);
 
-  // print h_costs
-  // for (size_t i = 0; i < psize; i++)
-  // {
-  //   for (size_t j = 0; j < psize; j++)
-  //   {
-  //     printf("%u, ", h_costs[i * psize + j]);
-  //   }
-  //   printf("\n");
-  // }
-  cost_type *d_costs;
+  // print(h_problem_info, true, true, false);
+  cost_type *h_costs = h_problem_info->costs;
 
-  CUDA_RUNTIME(cudaMalloc((void **)&d_costs, psize * psize * sizeof(cost_type)));
-  CUDA_RUNTIME(cudaMemcpy(d_costs, h_costs, psize * psize * sizeof(cost_type), cudaMemcpyHostToDevice));
+  // Copy problem info to device
+  problem_info *d_problem_info;
 
-  LAP<cost_type> *lap = new LAP<cost_type>(h_costs, psize, dev_);
-  lap->solve();
-  const cost_type UB = lap->objective;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&d_problem_info, sizeof(problem_info)));
+  d_problem_info->psize = psize;
+  d_problem_info->ncommodities = ncommodities;
+  CUDA_RUNTIME(cudaMalloc((void **)&d_problem_info->costs, psize * psize * sizeof(cost_type)));
+  CUDA_RUNTIME(cudaMemcpy(d_problem_info->costs, h_problem_info->costs, psize * psize * sizeof(cost_type), cudaMemcpyHostToDevice));
+  CUDA_RUNTIME(cudaMalloc((void **)&d_problem_info->weights, ncommodities * psize * psize * sizeof(weight_type)));
+  CUDA_RUNTIME(cudaMemcpy(d_problem_info->weights, h_problem_info->weights, ncommodities * psize * psize * sizeof(weight_type), cudaMemcpyHostToDevice));
+  CUDA_RUNTIME(cudaMalloc((void **)&d_problem_info->budgets, ncommodities * sizeof(weight_type)));
+  CUDA_RUNTIME(cudaMemcpy(d_problem_info->budgets, h_problem_info->budgets, ncommodities * sizeof(weight_type), cudaMemcpyHostToDevice));
 
-  Log(info, "LAP solved succesfully, objective %u\n", (uint)UB);
-  lap->print_solution();
-  delete lap;
-
-  Log(debug, "Solving LAP with Branching");
   Timer t = Timer();
+  // solve LAP
+  // Log(info, "Solving LAP");
+  // LAP<cost_type> *lap = new LAP<cost_type>(h_costs, psize);
+  // lap->solve();
+  // const cost_type UB = lap->objective;
+  // lap->print_solution();
+  // delete lap;
 
-  // Define a heap from the standard queue package
+  // Solve RCAP
+  cost_type UB = solve_with_gurobi<cost_type, weight_type>(h_problem_info->costs, h_problem_info->weights, h_problem_info->budgets, psize, ncommodities);
+  Log(info, "RCAP solved with GUROBI: objective %u\n", (uint)UB);
+
+  Log(info, "Time taken by Gurobi: %f sec", t.elapsed());
+
+  Log(debug, "Solving RCAP with Branching");
+  t.reset();
+
+  // Define a heap from the standard priority queue package
   std::priority_queue<node, std::vector<node>, std::greater<node>> heap;
-  bnb_stats stats;
-  stats.nodes_explored = 0;
-  stats.nodes_pruned = 0;
-  stats.max_heap_size = 0;
+  bnb_stats stats = bnb_stats();
 
   node_info *root_info = new node_info(psize);
   root_info->LB = 0;
@@ -79,66 +90,72 @@ int main(int argc, char **argv)
     node best_node = node(0, new node_info(psize));
     best_node.copy(heap.top(), psize);
     heap.pop();
-    stats.nodes_explored++;
     // Log(info, "best node key %u", (uint)best_node.key);
-
-    // Update bound of the best node
-    best_node.value->LB = 0;
-    for (uint i = 0; i < psize; i++)
+    bool feasible = feas_check(h_problem_info, best_node);
+    if (feasible)
     {
-      if (best_node.value->fixed_assignments[i] != -1)
+      // Update bound of the best node
+      // update_bounds(h_problem_info, best_node);
+      best_node.key = update_bounds_subgrad(h_problem_info, best_node, UB);
+
+      uint level = best_node.value->level;
+      if (best_node.key <= UB && best_node.value->level == psize)
       {
-        best_node.value->LB += h_costs[i * psize + best_node.value->fixed_assignments[i]];
+        optimal = true;
+        Log(critical, "Optimality Reached");
+        opt_node.copy(best_node, psize);
+        break;
       }
-    }
-    best_node.key = best_node.value->LB;
-    uint level = best_node.value->level;
-    if (best_node.key < UB)
-    {
-
-      // Branch on the best node to create (psize - level) new children nodes
-      for (uint i = 0; i < psize - level; i++)
+      else if (best_node.key <= UB)
       {
-        // Create a new child node
-        node_info *child_info = new node_info(psize);
-        child_info->LB = best_node.value->LB;
-        child_info->level = level + 1;
-        for (uint j = 0; j < psize; j++)
+        stats.nodes_explored++;
+        // Branch on the best node to create (psize - level) new children nodes
+        for (uint i = 0; i < psize - level; i++)
         {
-          child_info->fixed_assignments[j] = best_node.value->fixed_assignments[j];
-        }
-
-        // Update fixed assignments of the child by updating the ith unassigned assignment to level
-        uint counter = 0;
-        for (uint index = 0; index < psize; index++)
-        {
-          if (counter == i && child_info->fixed_assignments[index] == -1)
+          // Create a new child node
+          node_info *child_info = new node_info(psize);
+          child_info->LB = best_node.value->LB;
+          child_info->level = level + 1;
+          for (uint j = 0; j < psize; j++)
           {
-            // Log(debug, "Code reached here\n");
-            child_info->fixed_assignments[index] = level;
-
-            break;
+            child_info->fixed_assignments[j] = best_node.value->fixed_assignments[j];
           }
-          if (child_info->fixed_assignments[index] == -1)
-            counter++;
-        }
 
-        node child = node(best_node.key, child_info);
-        heap.push(child);
+          // Update fixed assignments of the child by updating the ith unassigned assignment to level
+          uint counter = 0;
+          for (uint index = 0; index < psize; index++)
+          {
+            if (counter == i && child_info->fixed_assignments[index] == -1)
+            {
+              // Log(debug, "Code reached here\n");
+              child_info->fixed_assignments[index] = level;
+
+              break;
+            }
+            if (child_info->fixed_assignments[index] == -1)
+              counter++;
+          }
+
+          node child = node(best_node.key, child_info);
+          heap.push(child);
+        }
+        stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
       }
-      stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
-    }
-    else if (best_node.key == UB && best_node.value->level == psize)
-    {
-      optimal = true;
-      Log(critical, "Optimality Reached");
-      opt_node.copy(best_node, psize);
-      break;
+      else
+      {
+        // Prune the node
+        stats.nodes_pruned_incumbent++;
+      }
     }
     else
     {
+      if (heap.size() <= 0)
+      {
+        Log(critical, "Heap underflow");
+        exit(-1);
+      }
       // Prune the node
-      stats.nodes_pruned++;
+      stats.nodes_pruned_infeasible++;
     }
   } while (!optimal || !heap.empty());
 
@@ -151,10 +168,12 @@ int main(int argc, char **argv)
     Log(critical, "Optimal solution not found");
   }
   Log(info, "Max heap size during execution: %lu", stats.max_heap_size);
-  Log(info, "Nodes explored: %u, Pruned: %u", stats.nodes_explored, stats.nodes_pruned);
+  Log(info, "Nodes Explored: %u, Incumbant: %u, Infeasible: %u", stats.nodes_explored, stats.nodes_pruned_incumbent, stats.nodes_pruned_infeasible);
 
   delete[] h_costs;
-  CUDA_RUNTIME(cudaFree(d_costs));
+  CUDA_RUNTIME(cudaFree(d_problem_info->costs));
+  CUDA_RUNTIME(cudaFree(d_problem_info->weights));
+  CUDA_RUNTIME(cudaFree(d_problem_info->budgets));
   Log(info, "Exiting program");
   Log(info, "Total time taken: %f sec", t.elapsed());
 }

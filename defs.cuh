@@ -3,12 +3,22 @@
 #define __DEBUG__
 // #define MAX_HEAP_SIZE 1000000
 #define MAX_TOKENS 100
+#define MAX_ITER 100
 #define MAX_DATA 0xffffffff
-#define eps 1e-6
+#define least_count 1e-6
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint;
 typedef uint cost_type;
+typedef uint weight_type;
+
+struct problem_info
+{
+  uint psize, ncommodities;
+  cost_type *costs;     // cost of assigning
+  weight_type *weights; // weight of each commodity
+  weight_type *budgets; // capacity of each commodity
+};
 
 struct node_info
 {
@@ -53,5 +63,15 @@ struct bnb_stats
 {
   uint max_heap_size;
   uint nodes_explored;
-  uint nodes_pruned;
+  uint nodes_pruned_incumbent;
+  uint nodes_pruned_infeasible;
+
+  // Define a constructor for the bnb_stats
+  __host__ bnb_stats()
+  {
+    max_heap_size = 0;
+    nodes_explored = 0;
+    nodes_pruned_incumbent = 0;
+    nodes_pruned_infeasible = 0;
+  }
 };

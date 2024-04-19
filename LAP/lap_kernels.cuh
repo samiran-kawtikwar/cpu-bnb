@@ -100,7 +100,7 @@ fundef row_sub(GLOBAL_HANDLE<cost_type> gh)
 template <typename cost_type = int>
 __device__ bool near_zero(cost_type val)
 {
-  return ((val < eps) && (val > -eps));
+  return ((val < least_count) && (val > -least_count));
 }
 
 fundef compress_matrix(GLOBAL_HANDLE<cost_type> gh)
