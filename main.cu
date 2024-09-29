@@ -36,29 +36,8 @@ int main(int argc, char **argv)
   problem_info *h_problem_info = generate_problem<cost_type>(config, config.seed);
 
   // print(h_problem_info, true, true, false);
-  cost_type *h_costs = h_problem_info->costs;
-
-  // Copy problem info to device
-  problem_info *d_problem_info;
-
-  CUDA_RUNTIME(cudaMallocManaged((void **)&d_problem_info, sizeof(problem_info)));
-  d_problem_info->psize = psize;
-  d_problem_info->ncommodities = ncommodities;
-  CUDA_RUNTIME(cudaMalloc((void **)&d_problem_info->costs, psize * psize * sizeof(cost_type)));
-  CUDA_RUNTIME(cudaMemcpy(d_problem_info->costs, h_problem_info->costs, psize * psize * sizeof(cost_type), cudaMemcpyHostToDevice));
-  CUDA_RUNTIME(cudaMalloc((void **)&d_problem_info->weights, ncommodities * psize * psize * sizeof(weight_type)));
-  CUDA_RUNTIME(cudaMemcpy(d_problem_info->weights, h_problem_info->weights, ncommodities * psize * psize * sizeof(weight_type), cudaMemcpyHostToDevice));
-  CUDA_RUNTIME(cudaMalloc((void **)&d_problem_info->budgets, ncommodities * sizeof(weight_type)));
-  CUDA_RUNTIME(cudaMemcpy(d_problem_info->budgets, h_problem_info->budgets, ncommodities * sizeof(weight_type), cudaMemcpyHostToDevice));
 
   Timer t = Timer();
-  // solve LAP
-  // Log(info, "Solving LAP");
-  // LAP<cost_type> *lap = new LAP<cost_type>(h_costs, psize);
-  // lap->solve();
-  // const cost_type UB = lap->objective;
-  // lap->print_solution();
-  // delete lap;
 
   // Solve RCAP
   cost_type UB = solve_with_gurobi<cost_type, weight_type>(h_problem_info->costs, h_problem_info->weights, h_problem_info->budgets, psize, ncommodities);
@@ -83,6 +62,10 @@ int main(int argc, char **argv)
   bool optimal = false;
   node opt_node = node(0, new node_info(psize));
   // uint iter = 0;
+
+  // Log(debug, " Subgrad on root node");
+  // root.key = update_bounds_subgrad(h_problem_info, root, UB);
+  // exit(-1);
   do
   {
     // Log(debug, "Starting iteration# %u", iter++);
@@ -91,6 +74,7 @@ int main(int argc, char **argv)
     best_node.copy(heap.top(), psize);
     heap.pop();
     // Log(info, "best node key %u", (uint)best_node.key);
+    // bool feasible = feas_check_naive(h_problem_info, best_node);
     bool feasible = feas_check(h_problem_info, best_node);
     if (feasible)
     {
@@ -170,10 +154,6 @@ int main(int argc, char **argv)
   Log(info, "Max heap size during execution: %lu", stats.max_heap_size);
   Log(info, "Nodes Explored: %u, Incumbant: %u, Infeasible: %u", stats.nodes_explored, stats.nodes_pruned_incumbent, stats.nodes_pruned_infeasible);
 
-  delete[] h_costs;
-  CUDA_RUNTIME(cudaFree(d_problem_info->costs));
-  CUDA_RUNTIME(cudaFree(d_problem_info->weights));
-  CUDA_RUNTIME(cudaFree(d_problem_info->budgets));
   Log(info, "Exiting program");
   Log(info, "Total time taken: %f sec", t.elapsed());
 }

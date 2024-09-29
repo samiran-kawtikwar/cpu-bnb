@@ -10,7 +10,7 @@ double round_to(double val, int places)
   return round(val * factor) / factor;
 }
 
-bool feas_check(const problem_info *pinfo, node &node)
+bool feas_check_naive(const problem_info *pinfo, node &node)
 {
   const uint N = pinfo->psize, K = pinfo->ncommodities;
 
@@ -30,6 +30,48 @@ bool feas_check(const problem_info *pinfo, node &node)
       return false;
   }
   return true;
+}
+
+bool feas_check(const problem_info *pinfo, node &node)
+{
+  bool feasible = true;
+  const uint N = pinfo->psize, K = pinfo->ncommodities;
+  uint *weights = pinfo->weights;
+  uint *budgets = pinfo->budgets;
+  int *row_fa = node.value->fixed_assignments;
+  int *row_assignments = new int[N];
+  double *lap_costs_fa = new double[N * N];
+  double used_budget = 0;
+  for (uint k = 0; k < K; k++)
+  {
+    // Update lap_costs_fa according to fixed assignments
+    for (uint i = 0; i < N; i++)
+    {
+      for (uint j = 0; j < N; j++)
+      {
+        lap_costs_fa[i * N + j] = double(weights[k * N * N + i * N + j]);
+      }
+    }
+    for (uint i = 0; i < N; i++)
+    {
+      for (uint j = 0; j < N; j++)
+      {
+        if (row_fa[i] > -1 && j != row_fa[i])
+        {
+          lap_costs_fa[i * N + j] = double(MAX_DATA);
+        }
+      }
+    }
+    HungarianAlgorithm HungAlgo;
+    HungAlgo.assignmentoptimal(row_assignments, &used_budget, lap_costs_fa, int(N), int(N));
+    if (used_budget > budgets[k])
+    {
+      feasible = false;
+      break;
+    }
+  }
+  // Log(debug, "Status of node: %s", feasible ? "Feasible" : "Infeasible");
+  return feasible;
 }
 
 void update_bounds(const problem_info *pinfo, node &node)
@@ -70,7 +112,6 @@ uint update_bounds_subgrad(const problem_info *pinfo, node &node, cost_type UB)
 
   std::fill(LB, LB + MAX_ITER, 0);
   std::fill(mult, mult + K, 0);
-  std::fill(X, X + N * N, 0);
   // set max_LB as the max of LB list
   max_LB = *std::max_element(LB, LB + MAX_ITER);
 
@@ -80,6 +121,7 @@ uint update_bounds_subgrad(const problem_info *pinfo, node &node, cost_type UB)
   {
     std::fill(lap_costs, lap_costs + N * N, 0);
     std::fill(g, g + K, 0);
+    std::fill(X, X + N * N, 0);
 
     for (uint i = 0; i < N; i++)
     {
@@ -116,7 +158,7 @@ uint update_bounds_subgrad(const problem_info *pinfo, node &node, cost_type UB)
     // get X from row_assignments
     for (uint i = 0; i < N; i++)
     {
-      X[i * N + row_assignments[i]] = 1;
+      X[row_assignments[i] * N + i] = 1;
     }
 
     // Find the difference between the sum of the costs and the budgets
@@ -151,6 +193,7 @@ uint update_bounds_subgrad(const problem_info *pinfo, node &node, cost_type UB)
       mult[k] += max(double(0), lrate * (g[k] * (UB - LB[t])) / denom);
     }
 
+    // Log(info, "Iteration %d, LB: %.3f, UB: %u, lrate: %.3f, Infeasibility: %.3f", t, LB[t], UB, lrate, feas);
     if ((t > 0 && t < 5 && LB[t] < LB[t - 1]) || LB[t] < 0)
     {
       // Log(debug, "Initial Step size too large, restart with smaller step size");
@@ -169,6 +212,8 @@ ret:
   // {
   //   if (LB[t] > 0)
   //     printf("%u, ", uint(ceil(round_to(LB[t], 2))));
+  //   else
+  //     break;
   // }
   // printf("\n");
   max_LB = max(ceil(round_to(*std::max_element(LB, LB + MAX_ITER), 2)), double(0));
