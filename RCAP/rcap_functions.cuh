@@ -1,7 +1,7 @@
 #include "../utils/logger.cuh"
 #include "../defs.cuh"
 #include "../LAP-cpu/hungarian-algorithm-cpp/Hungarian.h"
-#include <dlib/optimization/max_cost_assignment.h>
+// #include <dlib/optimization/max_cost_assignment.h>
 #include <cmath>
 
 double round_to(double val, int places)
