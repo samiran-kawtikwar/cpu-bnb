@@ -21,7 +21,6 @@ int main(int argc, char **argv)
   Log(info, "Starting program");
   Config config = parseArgs(argc, argv);
   printConfig(config);
-  int dev_ = config.deviceId;
   uint psize = config.user_n;
   uint ncommodities = config.user_ncommodities;
 
@@ -30,8 +29,6 @@ int main(int argc, char **argv)
     Log(critical, "Problem size too large, Implementation not ready yet. Use problem size <= 100");
     exit(-1);
   }
-  CUDA_RUNTIME(cudaDeviceReset());
-  CUDA_RUNTIME(cudaSetDevice(dev_));
 
   problem_info *h_problem_info = generate_problem<cost_type>(config, config.seed);
 
@@ -72,6 +69,7 @@ int main(int argc, char **argv)
     // get the best node from the heap
     node best_node = node(0, new node_info(psize));
     best_node.copy(heap.top(), psize);
+    delete heap.top().value;
     heap.pop();
     // Log(info, "best node key %u", (uint)best_node.key);
     // bool feasible = feas_check_naive(h_problem_info, best_node);
@@ -88,6 +86,7 @@ int main(int argc, char **argv)
         optimal = true;
         Log(critical, "Optimality Reached");
         opt_node.copy(best_node, psize);
+        delete best_node.value;
         break;
       }
       else if (best_node.key <= UB)
@@ -141,6 +140,7 @@ int main(int argc, char **argv)
       // Prune the node
       stats.nodes_pruned_infeasible++;
     }
+    delete best_node.value;
   } while (!optimal || !heap.empty());
 
   if (optimal)
@@ -156,4 +156,12 @@ int main(int argc, char **argv)
 
   Log(info, "Exiting program");
   Log(info, "Total time taken: %f sec", t.elapsed());
+
+  delete h_problem_info;
+  while (!heap.empty())
+  {
+    delete heap.top().value;
+    heap.pop();
+  }
+  delete opt_node.value;
 }

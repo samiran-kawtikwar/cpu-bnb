@@ -18,6 +18,13 @@ struct problem_info
   cost_type *costs;     // cost of assigning
   weight_type *weights; // weight of each commodity
   weight_type *budgets; // capacity of each commodity
+
+  ~problem_info()
+  {
+    delete[] costs;
+    delete[] weights;
+    delete[] budgets;
+  }
 };
 
 struct node_info
@@ -33,7 +40,7 @@ struct node_info
   };
   ~node_info()
   {
-    delete[] fixed_assignments;
+    free(fixed_assignments);
   };
 };
 
@@ -41,8 +48,8 @@ struct node
 {
   float key;
   node_info *value;
-  __host__ __device__ node(){};
-  __host__ __device__ node(float a, node_info *b) : key(a), value(b){};
+  __host__ __device__ node() {};
+  __host__ __device__ node(float a, node_info *b) : key(a), value(b) {};
   // Define a comparator called greater for the node
   __host__ __device__ bool operator>(const node &other) const
   {

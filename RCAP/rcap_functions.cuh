@@ -70,6 +70,8 @@ bool feas_check(const problem_info *pinfo, node &node)
       break;
     }
   }
+  delete[] row_assignments;
+  delete[] lap_costs_fa;
   // Log(debug, "Status of node: %s", feasible ? "Feasible" : "Infeasible");
   return feasible;
 }
@@ -230,6 +232,7 @@ ret:
   delete[] g;
   delete[] LB;
   delete[] lap_costs;
+  delete[] lap_costs_fa;
   delete[] row_assignments;
 
   return uint(max_LB);
