@@ -1,6 +1,5 @@
 #pragma once
 #include <random>
-#include <omp.h>
 #include <thread>
 #include <fstream>
 #include "config.h"
@@ -23,9 +22,9 @@ T *generate_cost(Config config, const int seed = 45345)
   memset(cost, 0, user_n * user_n * sizeof(T));
 
   // use all available CPU threads for generating cost
-  uint nthreads = min(user_n, (size_t)thread::hardware_concurrency() - 3); // remove 3 threads for OS and other tasks
+  // uint nthreads = min(user_n, (size_t)thread::hardware_concurrency() - 3); // remove 3 threads for OS and other tasks
+  uint nthreads = 1;
   uint rows_per_thread = ceil((nrows * 1.0) / nthreads);
-#pragma omp parallel for num_threads(nthreads)
   for (uint tid = 0; tid < nthreads; tid++)
   {
     uint first_row = tid * rows_per_thread;

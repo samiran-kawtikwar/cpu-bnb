@@ -40,3 +40,4 @@ logs/**
 
 #vscode
 .vscode/**
+results/**
