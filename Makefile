@@ -23,14 +23,13 @@ LDFLAGS_CUDA ?= -lcuda
 # cpp flags
 CPPFLAGS ?= -O3
 CPPINC ?= -I${GUROBI_HOME}/include
-
 LDIR_CPP ?= -L${GUROBI_HOME}/lib
 LDFLAGS_CPP ?= -lgurobi_c++ -lgurobi100 -lm -D_GLIBCXX_USE_CXX11_ABI=0
 
 all: $(BUILD_DIR)/main.exe
 
 $(BUILD_DIR)/main.exe: $(CU_OBJ_FILES) $(CPP_OBJ_FILES)
-	$(NVCC) -o $@ $(CU_OBJ_FILES) $(LDFLAGS_CUDA) $(CPP_OBJ_FILES) $(LDIR_CPP) $(LDFLAGS_CPP)
+	$(NVCC) -o $@ $(CU_OBJ_FILES) $(LDIR_CUDA) $(LDFLAGS_CUDA) $(CPP_OBJ_FILES) $(LDIR_CPP) $(LDFLAGS_CPP)
 
 # Pattern rule for cu files
 $(BUILD_DIR)/obj/%.cu.o: %.cu
