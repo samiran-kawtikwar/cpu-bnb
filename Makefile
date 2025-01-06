@@ -1,7 +1,7 @@
 NVCC ?= nvcc
 GCC ?= g++
 
-ARCH := 80
+ARCH := $(shell ~/get_SM.sh)
 BUILD_DIR ?=./build
 
 # Find all source files
@@ -16,9 +16,11 @@ CPP_OBJ_FILES := $(patsubst %.cpp,$(BUILD_DIR)/obj/%.cpp.o,$(CPP_FILES))
 # cuda flags
 CUDAFLAGS ?= -g -Xcompiler -lineinfo -O3 -arch=sm_$(ARCH) -gencode=arch=compute_$(ARCH),code=sm_$(ARCH) \
 						-gencode=arch=compute_$(ARCH),code=compute_$(ARCH)
+CUDAINC	?=
+LDIR_CUDA ?= -L$(CUDA_HOME)/lib64
+LDFLAGS_CUDA ?= -lcuda
 
-LDFLAGS_CUDA ?= -lcudart
-
+# cpp flags
 CPPFLAGS ?= -O3
 CPPINC ?= -I${GUROBI_HOME}/include
 
