@@ -5,7 +5,7 @@
 #include "config.h"
 #include "../utils/timer.h"
 #include "../utils/logger.cuh"
-#include "sfmt.h"
+#include "sfmt/sfmt.h"
 
 using namespace std;
 
@@ -123,6 +123,9 @@ int *createDim2(Config config)
 
 double *generateNormalSubProblem(Config config, problem_info *info, unsigned long seed)
 {
+  info->dim1 = createDim1(config);
+  info->dim2 = createDim2(config);
+
   uint N = config.user_nnodes;
   uint K = config.user_nframes;
   int *dim1 = info->dim1;
@@ -172,16 +175,11 @@ template <typename T = double>
 problem_info *generate_problem(Config config, int seed = 45345)
 {
   problem_info *info = new problem_info(config.user_nnodes, config.user_nframes);
-  uint N = info->N;
-  uint K = info->K;
-  // Allocate memory for cost matrix
 
   // Generate cycle data
   info->cycle = createProbGenData(config, seed);
 
   // Generate cost matrix
-  info->dim1 = createDim1(config);
-  info->dim2 = createDim2(config);
   info->cost_matrix = generateNormalSubProblem(config, info, seed);
 
   return info;
