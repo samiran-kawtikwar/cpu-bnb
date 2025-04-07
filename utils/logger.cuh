@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <stdint.h>
 #define __DEBUG__
 
 namespace logger

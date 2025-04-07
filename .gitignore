@@ -37,6 +37,7 @@ bin/**
 scripts/**
 logs/**
 *.log
+*.json
 
 #vscode
 .vscode/**
