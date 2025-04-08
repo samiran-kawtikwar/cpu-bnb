@@ -2,37 +2,18 @@
 #include <random>
 #include <omp.h>
 #include <iostream>
+#include <cstring>
 #include "config.h"
+#include "problem_info.h"
 #include "../utils/timer.h"
 #include "../utils/logger.cuh"
 #include "sfmt/sfmt.h"
 
 using namespace std;
 
-struct problem_info
-{
-  uint N, K, SP;
-
-  int *cycle;
-  double *cost_matrix;
-  int *dim1, *dim2;
-  problem_info(uint nodes, uint frames)
-  {
-    N = nodes;
-    K = frames;
-    SP = K * (K - 1) / 2;
-  }
-  ~problem_info()
-  {
-    delete[] cycle;
-    delete[] cost_matrix;
-    delete[] dim1;
-    delete[] dim2;
-  }
-};
-
 int *createProbGenData(Config config, const unsigned long seed)
 {
+  Log(debug, "Generating cycle data");
   uint N = config.user_nnodes;
   uint K = config.user_nframes;
 
@@ -64,6 +45,7 @@ int *createProbGenData(Config config, const unsigned long seed)
   //   }
   //   cout << endl;
   // }
+  Log(debug, "Generated cycle data");
   return cycle;
 }
 
@@ -121,36 +103,42 @@ int *createDim2(Config config)
   return dim2;
 }
 
-double *generateNormalSubProblem(Config config, problem_info *info, unsigned long seed)
+template <typename T = double>
+T *generateNormalSubProblem(Config config, problem_info<T> *info, unsigned long seed)
 {
+  Log(debug, "Generating cost matrix with gaussian noise");
   info->dim1 = createDim1(config);
   info->dim2 = createDim2(config);
-
+  Log(debug, "dim1 and dim2 created");
   uint N = config.user_nnodes;
-  uint K = config.user_nframes;
+
   int *dim1 = info->dim1;
   int *dim2 = info->dim2;
   int SP = info->SP;
   int *cycle = info->cycle;
   double sigma = config.sigma;
-
-  double *cost_matrix = new double[N * N * K];
-  CRandomSFMT randomGenerator(seed);
+  uint64_t cost_matrix_size = uint64_t(N) * N * SP;
+  double *cost_matrix = new double[cost_matrix_size];
   //	double m = 0;
+  Log(debug, "Generating cost matrix");
+
   for (int i = 0; i < SP; i++) // SP = K * (K - 1) / 2
   {
+    CRandomSFMT randomGenerator(seed + i);
     for (int j = 0; j < N; j++)
     {
       for (int k = 0; k < N; k++)
       {
         int iSP = dim1[i], jSP = dim2[i];
         double val = randomGenerator.Normal(std::abs(cycle[iSP * N + j] - cycle[jSP * N + k]) - 1, sigma);
-        long index = long(i * N * N) + (j * N) + k;
+        uint64_t index = uint64_t(i * N * N) + (j * N) + k;
+        assert(index < uint64_t(cost_matrix_size));
         cost_matrix[index] = val;
       }
     }
   }
 
+  Log(debug, "Cost matrix generated");
   //************print cost_matrix**********
   // for (int i = 0; i < SP; i++)
   // {
@@ -159,7 +147,7 @@ double *generateNormalSubProblem(Config config, problem_info *info, unsigned lon
   //     for (int k = 0; k < N; k++)
   //     {
   //       int iSP = dim1[i], jSP = dim2[i];
-  //       long index = long(i * N * N) + (j * N) + k;
+  //       uint64_t index = uint64_t(i * N * N) + (j * N) + k;
   //       cout << cost_matrix[index] << " ";
   //     }
   //     cout << endl;
@@ -172,9 +160,10 @@ double *generateNormalSubProblem(Config config, problem_info *info, unsigned lon
 }
 
 template <typename T = double>
-problem_info *generate_problem(Config config, int seed = 45345)
+problem_info<T> *generate_problem(Config config, int seed = 45345)
 {
-  problem_info *info = new problem_info(config.user_nnodes, config.user_nframes);
+  Log(debug, "Generating problem with seed %d", seed);
+  problem_info<T> *info = new problem_info(config.user_nnodes, config.user_nframes);
 
   // Generate cycle data
   info->cycle = createProbGenData(config, seed);
@@ -185,7 +174,8 @@ problem_info *generate_problem(Config config, int seed = 45345)
   return info;
 }
 
-void print(problem_info *info, bool cycle = true, bool cost_matrix = true)
+template <typename T = double>
+void print(problem_info<T> *info, bool cycle = true, bool cost_matrix = true)
 {
   uint N = info->N;
   uint K = info->K;
@@ -211,8 +201,8 @@ void print(problem_info *info, bool cycle = true, bool cost_matrix = true)
       {
         for (size_t k = 0; k < N; k++)
         {
-          long index = long(i * N * N) + (j * N) + k;
-          printf("%f, ", info->cost_matrix[index]);
+          uint64_t index = uint64_t(i * N * N) + (j * N) + k;
+          printf("%.3f, ", float(info->cost_matrix[index]));
         }
         printf("\n");
       }
