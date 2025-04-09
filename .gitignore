@@ -36,6 +36,7 @@ build/**
 bin/**
 scripts/**
 logs/**
+QAP/instances/**
 
 #vscode
 .vscode/**
