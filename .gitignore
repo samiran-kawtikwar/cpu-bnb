@@ -36,7 +36,10 @@ build/**
 bin/**
 scripts/**
 logs/**
-*.log
 
 #vscode
 .vscode/**
+
+# log/environment files
+*.log
+*.json
