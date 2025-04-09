@@ -5,6 +5,8 @@
 #include <stdint.h>
 #define __DEBUG__
 
+#ifdef __CUDACC__
+
 namespace logger
 {
   __device__ __forceinline__ uint32_t my_sleep(uint32_t ns)
@@ -15,6 +17,8 @@ namespace logger
     return ns;
   }
 }
+
+#endif
 
 const char newline[] = "\n";
 const char comma[] = ", ";
@@ -31,8 +35,13 @@ enum LogPriorityEnum
   none
 };
 
+#ifdef __CUDACC__
 template <const char *END = newline, typename... Args>
 __host__ __forceinline__ void Log(LogPriorityEnum l, const char *f, Args... args)
+#else
+template <const char *END = newline, typename... Args>
+void Log(LogPriorityEnum l, const char *f, Args... args)
+#endif // __CUDACC__
 {
 
   bool print = true;
@@ -82,6 +91,8 @@ __host__ __forceinline__ void Log(LogPriorityEnum l, const char *f, Args... args
     printf("\033[0m");
   }
 }
+
+#ifdef __CUDACC__
 
 template <typename... Args>
 __device__ __forceinline__ void DLog(LogPriorityEnum l, const char *f, Args... args)
@@ -174,3 +185,4 @@ void printDeviceMatrix(const cost_type *array, size_t nrows, size_t ncols, std::
   }
   delete[] temp;
 }
+#endif
