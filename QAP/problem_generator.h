@@ -24,6 +24,11 @@ problem_info *generate_problem(Config &config, const int seed = 45345)
     info->N = user_n;
     distances = new cost_type[user_n * user_n];
     flows = new cost_type[user_n * user_n];
+    if (user_n > 50)
+    {
+      Log(critical, "Problem size too large, Implementation not ready yet. Use problem size <= 50");
+      exit(-1);
+    }
     // Generate random distances and flows
     default_random_engine generator(seed);
     generator.discard(1);
@@ -63,6 +68,7 @@ problem_info *generate_problem(Config &config, const int seed = 45345)
       infile >> info->N;
       uint n = info->N;
       config.user_n = n;
+
       distances = new cost_type[n * n];
       flows = new cost_type[n * n];
       infile >> info->opt_objective;
@@ -98,6 +104,11 @@ problem_info *generate_problem(Config &config, const int seed = 45345)
   // Copy distances and flows to info
   info->distances = distances;
   info->flows = flows;
+  if (info->N > 50)
+  {
+    Log(critical, "Problem size too large, Implementation not ready yet. Use problem size <= 50");
+    exit(-1);
+  }
   return info;
 }
 

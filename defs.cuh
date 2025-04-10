@@ -6,6 +6,7 @@
 #define MAX_ITER 100
 #define MAX_DATA 0xffffffff
 #define least_count 1e-6
+#define DBL_MAX 1e10
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint;

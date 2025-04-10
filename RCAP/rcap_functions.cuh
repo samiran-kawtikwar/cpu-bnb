@@ -1,3 +1,6 @@
+#pragma once
+#include "config.h"
+#include "problem_info.h"
 #include "../utils/logger.cuh"
 #include "../defs.cuh"
 #include "../LAP-cpu/hungarian-algorithm-cpp/Hungarian.h"
