@@ -9,10 +9,10 @@
 #include "LAP/Hung_lap.cuh"
 #include "LAP/lap_kernels.cuh"
 
-#include "RCAP/config.h"
-#include "RCAP/cost_generator.h"
-#include "RCAP/gurobi_solver.h"
-#include "RCAP/rcap_functions.cuh"
+#include "QAP/config.h"
+#include "QAP/problem_generator.h"
+#include "QAP/gurobi_solver.h"
+// #include "RCAP/rcap_functions.cuh"
 
 #include <queue>
 
@@ -20,19 +20,18 @@ int main(int argc, char **argv)
 {
   Log(info, "Starting program");
   Config config = parseArgs(argc, argv);
-  printConfig(config);
-  uint psize = config.user_n;
-  uint ncommodities = config.user_ncommodities;
 
-  if (psize > 100)
+  problem_info *h_problem_info = generate_problem(config, config.seed);
+  print(h_problem_info, true, true);
+  printConfig(config);
+
+  if (config.user_n > 50)
   {
-    Log(critical, "Problem size too large, Implementation not ready yet. Use problem size <= 100");
+    Log(critical, "Problem size too large, Implementation not ready yet. Use problem size <= 50");
     exit(-1);
   }
 
-  problem_info *h_problem_info = generate_problem<cost_type>(config, config.seed);
-
-  // print(h_problem_info, true, true, false);
+#if 0
 
   Timer t = Timer();
 
@@ -164,4 +163,6 @@ int main(int argc, char **argv)
     heap.pop();
   }
   delete opt_node.value;
+#endif
+  return 0;
 }

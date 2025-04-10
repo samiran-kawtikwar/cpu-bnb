@@ -1,9 +1,16 @@
-#pragma onece
+#pragma once
 #include <stdio.h>
 #include <string>
 #include <unistd.h>
 
 typedef unsigned int uint;
+typedef uint cost_type;
+
+enum ProblemType
+{
+  generated = 0,
+  qaplib
+};
 
 struct Config
 {
@@ -11,6 +18,7 @@ struct Config
   int deviceId;
   char *inputfile;
   int seed;
+  ProblemType problemType;
 };
 
 static void usage()
@@ -67,5 +75,9 @@ static Config parseArgs(int argc, char **argv)
       exit(1);
     }
   }
+  if (config.inputfile)
+    config.problemType = qaplib;
+  else
+    config.problemType = generated;
   return config;
 }
