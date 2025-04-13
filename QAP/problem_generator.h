@@ -14,7 +14,7 @@ template <typename cost_type = uint>
 problem_info *generate_problem(Config &config, const int seed = 45345)
 {
   size_t user_n = config.user_n;
-  double frac = 1;
+  double frac = 10;
 
   problem_info *info = new problem_info(user_n);
   cost_type *distances, *flows;

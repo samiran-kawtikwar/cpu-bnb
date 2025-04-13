@@ -40,7 +40,7 @@ struct node
     return key > other.key;
   }
   // ~node() { delete[] value; };
-  void copy(node other, uint psize)
+  void copy(node other, uint psize) // copies node and node_info
   {
     key = other.key;
     value->LB = other.value->LB;
@@ -48,6 +48,12 @@ struct node
     value->id = other.value->id;
     memcpy(value->fixed_assignments, other.value->fixed_assignments, sizeof(int) * psize);
   }
+  __host__ void print(const uint psize, std::string message = "NULL")
+  {
+    Log<colon>(debug, message.c_str());
+    printHostArray(value->fixed_assignments, psize);
+    printf("LB: %.0f\t level: %u\n", key, value->level);
+  };
 };
 
 struct bnb_stats
