@@ -19,15 +19,14 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
   }
 }
 
-#define execKernel(kernel, gridSize, blockSize, deviceId, verbose, ...)                       \
-  {                                                                                           \
-    dim3 grid(gridSize);                                                                      \
-    dim3 block(blockSize);                                                                    \
-                                                                                              \
-    CUDA_RUNTIME(cudaSetDevice(deviceId));                                                    \
-    if (verbose)                                                                              \
-      Log(info, "Launching %s with nblocks: %u, blockDim: %u", #kernel, gridSize, blockSize); \
-    kernel<<<grid, block>>>(__VA_ARGS__);                                                     \
-    CUDA_RUNTIME(cudaGetLastError());                                                         \
-    CUDA_RUNTIME(cudaDeviceSynchronize());                                                    \
+#define execKernel(kernel, gridSize, blockSize, deviceId, verbose, ...)                     \
+  {                                                                                         \
+    dim3 grid(gridSize);                                                                    \
+    dim3 block(blockSize);                                                                  \
+                                                                                            \
+    CUDA_RUNTIME(cudaSetDevice(deviceId));                                                  \
+    Log(info, "Launching %s with nblocks: %u, blockDim: %u", #kernel, gridSize, blockSize); \
+    kernel<<<grid, block>>>(__VA_ARGS__);                                                   \
+    CUDA_RUNTIME(cudaGetLastError());                                                       \
+    CUDA_RUNTIME(cudaDeviceSynchronize());                                                  \
   }
