@@ -2,7 +2,7 @@
 #include "../defs.cuh"
 #include "../utils/logger.cuh"
 #include "../utils/timer.h"
-#include "block_lap_kernels.cuh"
+#include "tile_lap_kernels.cuh"
 #include <thrust/reduce.h>
 #include <thrust/execution_policy.h>
 
@@ -50,6 +50,7 @@ public:
     Log(debug, "Allocating memory for %d problems", maxtile);
 
     // external memory
+    CUDA_RUNTIME(cudaMalloc((void **)&th.cost, maxtile * size * size * sizeof(cost_type)));
     CUDA_RUNTIME(cudaMalloc((void **)&th.slack, maxtile * size * size * sizeof(cost_type)));
     CUDA_RUNTIME(cudaMalloc((void **)&th.column_of_star_at_row, maxtile * h_nrows * sizeof(int)));
 
@@ -63,7 +64,7 @@ public:
     CUDA_RUNTIME(cudaMalloc((void **)&th.min_in_rows, maxtile * h_nrows * sizeof(cost_type)));
     CUDA_RUNTIME(cudaMalloc((void **)&th.min_in_cols, maxtile * h_ncols * sizeof(cost_type)));
     CUDA_RUNTIME(cudaMalloc((void **)&th.row_of_star_at_column, maxtile * h_ncols * sizeof(int)));
-    CUDA_RUNTIME(cudaMalloc((void **)&th.objective, maxtile * 1 * sizeof(cost_type)));
+    CUDA_RUNTIME(cudaMallocManaged((void **)&th.objective, maxtile * 1 * sizeof(cost_type)));
 
     if (th.memoryloc == INTERNAL)
     {

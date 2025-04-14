@@ -1,5 +1,6 @@
 #pragma once
 #include <cooperative_groups.h>
+#include <cub/cub.cuh>
 #include "../utils/cuda_utils.cuh"
 #include "device_utils.cuh"
 #include "../defs.cuh"
@@ -107,7 +108,7 @@ fundef void init(TILE tile, PARTITION_HANDLE<data> &ph) // with single block
   // initialize slack with cost
   for (size_t i = tile.thread_rank(); i < SIZE * SIZE; i += TileSize)
   {
-    ph.slack[i] = ph.cost[i];
+    // ph.slack[i] = ph.cost[i];
     ph.zeros[i] = size_t(0); // Reset old zero indices
   }
 }
@@ -663,6 +664,8 @@ fundef void set_handles(TILE tile, PARTITION_HANDLE<data> &ph, TILED_HANDLE<data
 
   if (tile.thread_rank() == 0)
   {
+    // DLog(critical, "BlockIdx %u, WorkerId %u, SIZE %lu\n", blockIdx.x, worker_id, SIZE);
+    ph.cost = &th.cost[worker_id * SIZE * SIZE];
     ph.slack = &th.slack[worker_id * SIZE * SIZE];
     ph.column_of_star_at_row = &th.column_of_star_at_row[worker_id * SIZE];
 

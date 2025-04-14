@@ -1,7 +1,7 @@
 #pragma once
 #include "../utils/cuda_utils.cuh"
-
-#define MAX_DATA float(1e6)
+#include "../defs.cuh"
+// #define MAX_DATA float(1e6)
 typedef unsigned long long int uint64;
 #define eps 1e-6
 #define __DEBUG__D false
@@ -80,7 +80,7 @@ struct TILED_HANDLE
     CUDA_RUNTIME(cudaFree(min_in_rows));
     CUDA_RUNTIME(cudaFree(min_in_cols));
     CUDA_RUNTIME(cudaFree(row_of_star_at_column));
-    // CUDA_RUNTIME(cudaFree(cost));
+    CUDA_RUNTIME(cudaFree(cost));
     CUDA_RUNTIME(cudaFree(slack));
     CUDA_RUNTIME(cudaFree(zeros));
     CUDA_RUNTIME(cudaFree(column_of_star_at_row));

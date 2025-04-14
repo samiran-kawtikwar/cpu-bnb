@@ -4,12 +4,17 @@
 // #define MAX_HEAP_SIZE 1000000
 #define MAX_TOKENS 100
 #define MAX_ITER 100
-#define MAX_DATA 0xffffffff
 #define least_count 1e-6
+#define MAX_DATA 0xffffffff
 #define DBL_MAX 1e10
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint;
+
+#define BlockSize 64U
+#define TileSize 64U
+#define TilesPerBlock (BlockSize / TileSize)
+#define TILE cg::thread_block_tile<TileSize>
 
 struct node_info
 {
