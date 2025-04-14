@@ -190,7 +190,7 @@ void printDeviceArray(const cost_type *d_array, size_t len, std::string name = "
   if (len >= 1)
   {
     cost_type *temp = new cost_type[len];
-    CUDA_RUNTIME(cudaMemcpy(temp, d_array, len * sizeof(cost_type), cudaMemcpyDefault));
+    cudaMemcpy(temp, d_array, len * sizeof(cost_type), cudaMemcpyDefault);
     printHostArray(temp, len, "NULL");
     delete[] temp;
   }

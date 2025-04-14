@@ -6,8 +6,7 @@
 #include "utils/timer.h"
 #include "defs.cuh"
 #include "LAP/device_utils.cuh"
-#include "LAP/Hung_lap.cuh"
-#include "LAP/lap_kernels.cuh"
+#include "LAP/Hung_Tlap.cuh"
 
 #include "QAP/config.h"
 #include "QAP/problem_generator.h"
@@ -21,13 +20,13 @@ int main(int argc, char **argv)
   Log(info, "Starting program");
   Config config = parseArgs(argc, argv);
 
-  problem_info *h_problem_info = generate_problem(config, config.seed);
-  print(h_problem_info, true, true);
+  problem_info *h_pinfo = generate_problem(config, config.seed);
+  print(h_pinfo, false, false);
   printConfig(config);
-  size_t psize = h_problem_info->N;
-  cost_type UB = h_problem_info->opt_objective;
+  size_t psize = h_pinfo->N;
+  cost_type UB = h_pinfo->opt_objective;
 
-  Log(debug, "Solving QAP with Branching");
+  Log(info, "Solving QAP with Branching");
   Timer t = Timer();
   // Define a heap from the standard priority queue package
   std::priority_queue<node, std::vector<node>, std::greater<node>> heap;
@@ -42,10 +41,12 @@ int main(int argc, char **argv)
   // start branch and bound
   bool optimal = false;
   node opt_node = node(0, new node_info(psize));
-  // Log(debug, " Subgrad on root node");
-  // root.key = update_bounds_GL(h_problem_info, root, UB);
-  // Log(debug, "Root node key %u", (uint)root.key);
-
+  problem_info d_pinfo = problem_info(psize);
+  CUDA_RUNTIME(cudaMalloc((void **)&d_pinfo.distances, psize * psize * sizeof(cost_type)));
+  CUDA_RUNTIME(cudaMalloc((void **)&d_pinfo.flows, psize * psize * sizeof(cost_type)));
+  CUDA_RUNTIME(cudaMemcpy(d_pinfo.distances, h_pinfo->distances, psize * psize * sizeof(cost_type), cudaMemcpyHostToDevice));
+  CUDA_RUNTIME(cudaMemcpy(d_pinfo.flows, h_pinfo->flows, psize * psize * sizeof(cost_type), cudaMemcpyHostToDevice));
+  TLAP<cost_type> tlap(psize * psize, psize, config.deviceId);
   do
   {
     // Log(debug, "Starting iteration# %u", iter++);
@@ -56,11 +57,8 @@ int main(int argc, char **argv)
     heap.pop();
     // Log(info, "best node key %u", (uint)best_node.key);
     // Update bound of the best node
-    // update_bounds(h_problem_info, best_node);
-    // printHostArray(best_node.value->fixed_assignments, psize, "Solving node with fa: ");
-    best_node.key = update_bounds_GL(h_problem_info, best_node, UB);
-    // Log(debug, "Solved... LB: %u, level: %u", (uint)best_node.key, best_node.value->level);
-
+    // update_bounds(h_pinfo, best_node);
+    best_node.key = update_bounds_GL(d_pinfo, best_node, tlap);
     uint level = best_node.value->level;
     if (best_node.key <= UB && best_node.value->level == psize)
     {
@@ -128,7 +126,7 @@ int main(int argc, char **argv)
   Log(info, "Exiting program");
   Log(info, "Total time taken: %f sec", t.elapsed());
 
-  delete h_problem_info;
+  delete h_pinfo;
   while (!heap.empty())
   {
     delete heap.top().value;
