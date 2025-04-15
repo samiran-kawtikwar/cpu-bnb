@@ -25,10 +25,11 @@ void sanity_check(double *costs, int N)
 
 template <typename cost_type = uint>
 __global__ void populate_costs(const uint N, const int *fa, const int *la,
-                               const cost_type *distances, const cost_type *flows, cost_type *global_costs)
+                               const cost_type *distances, const cost_type *flows, TILED_HANDLE<cost_type> th)
 {
   // Retrieve problem size and pointers to distance and flow arrays.
-  cost_type *costs = &global_costs[blockIdx.x * N * N];
+  cost_type *costs = &th.slack[blockIdx.x * N * N];
+  cost_type *cpy = &th.cost[blockIdx.x * N * N];
   const uint i = blockIdx.x / N, k = blockIdx.x % N;
   // Calculate a unique linear thread ID from the 2D thread indices.
   const uint tid = threadIdx.x;
@@ -61,6 +62,17 @@ __global__ void populate_costs(const uint N, const int *fa, const int *la,
       if ((j == i && k != l) || (l == k && i != j))
         costs[idx] = MAX_DATA;
     }
+  }
+  __syncthreads();
+
+  // only need to solve these problems
+  if ((fa[i] == -1 && la[k] == -1) || (fa[i] > -1 && la[k] == i))
+  {
+    // Copy the computed costs
+    for (uint idx = tid; idx <= total_elements; idx += blockDim.x)
+      cpy[idx] = costs[idx];
+    __syncthreads();
+    THA_device<cost_type>(th);
   }
 }
 
@@ -126,9 +138,8 @@ cost_type update_bounds_GL(const problem_info &pinfo, node &node, TLAP<cost_type
   CUDA_RUNTIME(cudaMemcpy(dfa, fa, N * sizeof(int), cudaMemcpyHostToDevice));
   CUDA_RUNTIME(cudaMemcpy(dla, la, N * sizeof(int), cudaMemcpyHostToDevice));
 
-  execKernel(populate_costs<cost_type>, N * N, BlockSize, 0, false, N, dfa, dla, dist, flows, th.cost);
-  CUDA_RUNTIME(cudaMemcpy(th.slack, th.cost, N * N * N * N * sizeof(cost_type), cudaMemcpyDeviceToDevice));
-  execKernel(THA<cost_type>, N * N, BlockSize, 0, false, tlap.th);
+  execKernel(populate_costs<cost_type>, N * N, BlockSize, 0, false, N, dfa, dla, dist, flows, th);
+  // execKernel(THA<cost_type>, N * N, BlockSize, 0, false, tlap.th);
   // printDeviceArray<cost_type>(th.objective, N * N, "Objectives");
   for (uint i = 0; i < N; i++)
   {
