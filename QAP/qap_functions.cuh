@@ -4,6 +4,7 @@
 #include "../utils/logger.cuh"
 #include "../defs.cuh"
 #include <cmath>
+#include <omp.h>
 #include "../LAP-cpu/hungarian-algorithm-cpp/Hungarian.h"
 
 void sanity_check(double *costs, int N)
@@ -73,36 +74,40 @@ cost_type update_bounds_GL(const problem_info *pinfo, node &node, cost_type UB)
   }
   // printHostArray(la, N, "la");
   double *z = new double[N * N];
-  HungarianAlgorithm HungAlgo;
 
-  double *temp_costs = new double[N * N];
-  int *temp_ass = new int[N];
-  for (uint i = 0; i < N; i++)
+#pragma omp parallel for
+  for (uint id = 0; id < N * N; id++)
   {
-    for (uint k = 0; k < N; k++)
+    uint i = id / N;
+    uint k = id % N;
+    HungarianAlgorithm HungAlgo;
+    double *temp_costs = new double[N * N];
+    int *temp_ass = new int[N];
+    if ((fa[i] == -1 && la[k] == -1) || (fa[i] > -1 && la[k] == i)) // the facility and locations are unassigned
     {
-      if ((fa[i] == -1 && la[k] == -1) || (fa[i] > -1 && la[k] == i)) // the facility and locations are unassigned
-      {                                                               // z_{i,k} = LAP solution if i is assigned to k
-        populate_costs<cost_type>(pinfo, i, k, fa, la, temp_costs);
-        // printHostMatrix(temp_costs, N, N, "temp_costs");
-        // sanity_check(temp_costs, N);
-        // Log(info, "Passed check for i: %u, k: %u", i, k);
-        // if (fa[0] <= 0 && fa[1] == -1 && fa[2] == -1 && fa[3] == 1)
-        // {
-        //   std::string str = "c_" + std::to_string(i) + std::to_string(k);
-        //   printHostMatrix(temp_costs, N, N, str.c_str());
-        // }
-        // Solve LAP
-        HungAlgo.assignmentoptimal(temp_ass, &z[N * i + k], temp_costs, int(N), int(N));
-      }
-      else
-        z[N * i + k] = DBL_MAX;
+      // z_{i,k} = LAP solution if i is assigned to k
+      populate_costs<cost_type>(pinfo, i, k, fa, la, temp_costs);
+      // printHostMatrix(temp_costs, N, N, "temp_costs");
+      // sanity_check(temp_costs, N);
+      // Log(info, "Passed check for i: %u, k: %u", i, k);
+      // if (fa[0] <= 0 && fa[1] == -1 && fa[2] == -1 && fa[3] == 1)
+      // {
+      //   std::string str = "c_" + std::to_string(i) + std::to_string(k);
+      //   printHostMatrix(temp_costs, N, N, str.c_str());
+      // }
+      // Solve LAP
+      HungAlgo.assignmentoptimal(temp_ass, &z[N * i + k], temp_costs, int(N), int(N));
     }
+    else
+      z[N * i + k] = DBL_MAX;
+    delete[] temp_costs;
+    delete[] temp_ass;
   }
-  delete[] temp_costs;
 
   // printHostMatrix(z, N, N, "z costs");
   double GL_bound = 0.0;
+  int *temp_ass = new int[N];
+  HungarianAlgorithm HungAlgo;
   HungAlgo.assignmentoptimal(temp_ass, &GL_bound, z, int(N), int(N));
   delete[] z;
   delete[] temp_ass;
