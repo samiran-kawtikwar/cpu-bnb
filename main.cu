@@ -39,7 +39,7 @@ int main(int argc, char **argv)
   bnb_stats stats = bnb_stats();
 
   // start branch and bound
-  std::atomic<bool> optimal{false};
+  std::atomic<bool> optimal{false}, heap_empty{false};
   node opt_node = node(0, new node_info(psize));
   problem_info d_pinfo = problem_info(psize);
   CUDA_RUNTIME(cudaMalloc((void **)&d_pinfo.distances, psize * psize * sizeof(cost_type)));
@@ -73,91 +73,109 @@ int main(int argc, char **argv)
   uint counter_1000 = 0;
   std::vector<bool> isValid(psize, false);
   std::vector<node> children(psize);
+  node best_node;
 
-  while (!optimal.load(std::memory_order_relaxed) && !heap.empty())
+#pragma omp parallel num_threads(psize)
   {
-    // Log(debug, "Starting iteration# %u", iter++);
-    // get the best node from the heap
-    node best_node = node(0, new node_info(psize));
-    best_node.copyFrom(heap.top(), psize);
-    delete heap.top().value;
-    heap.pop();
-    uint level = best_node.value->level;
-
-// Log(info, "popped node from heap with LB %u, level %u", (uint)best_node.key, level);
-#pragma omp parallel for num_threads(psize - level)
-    for (uint i = 0; i < psize - level; i++)
+    while (!optimal.load(std::memory_order_relaxed) && !heap_empty.load(std::memory_order_relaxed))
     {
-      // 1) Early‑exit if some thread already found the true leaf
-      if (optimal.load(std::memory_order_acquire))
-        continue;
-
-      // Branch on the best node to create (psize - level) new children nodes
-      // Create a new child node
-      node_info *child_info = new node_info(psize);
-      best_node.value->deepcopy(child_info, psize);
-      child_info->level = level + 1;
-      // Log<colon>(info, "Level %u, child %u", level, i);
-      // printHostArray(child_info->fixed_assignments, psize, "Input fa");
-      // Update fixed assignments of the child by updating the ith unassigned assignment to level
-      uint counter = 0;
-      for (uint index = 0; index < psize; index++)
+#pragma omp single
       {
-        if (counter == i && child_info->fixed_assignments[index] == -1)
+        best_node = node(0, new node_info(psize));
+        if (heap.empty())
+          heap_empty.store(true, std::memory_order_release);
+        else
+        {
+          // Log(debug, "Starting iteration# %u", iter++);
+          // get the best node from the heap
+          best_node.copyFrom(heap.top(), psize);
+          delete heap.top().value;
+          heap.pop();
+        }
+      }
+#pragma omp barrier
+
+      if (optimal.load(std::memory_order_relaxed) || heap_empty.load(std::memory_order_relaxed))
+        break;
+
+      uint level = best_node.value->level;
+#pragma omp for nowait
+      for (uint i = 0; i < psize - level; i++)
+      {
+        // 1) Early‑exit if some thread already found the true leaf
+        if (optimal.load(std::memory_order_acquire))
+          continue;
+
+        // Branch on the best node to create (psize - level) new children nodes
+        // Create a new child node
+        node_info *child_info = new node_info(psize);
+        best_node.value->deepcopy(child_info, psize);
+        child_info->level = level + 1;
+        // Log<colon>(info, "Level %u, child %u", level, i);
+        // printHostArray(child_info->fixed_assignments, psize, "Input fa");
+        // Update fixed assignments of the child by updating the ith unassigned assignment to level
+        uint counter = 0;
+        for (uint index = 0; index < psize; index++)
+        {
+          if (counter == i && child_info->fixed_assignments[index] == -1)
+          {
+            // Log(debug, "Code reached here\n");
+            child_info->fixed_assignments[index] = level; // fixes the assignment at counter
+            break;
+          }
+          if (child_info->fixed_assignments[index] == -1)
+            counter++;
+        }
+        // printHostArray(child_info->fixed_assignments, psize, "Output fa");
+        // Update bounds of the child node
+        node child = node(best_node.key, child_info);
+        child_info->LB = update_bounds_GL(d_pinfo, child, tlaps[i], handles[i]);
+        child.key = child_info->LB;
+        if (child.key <= UB && child_info->level == psize)
         {
           // Log(debug, "Code reached here\n");
-          child_info->fixed_assignments[index] = level; // fixes the assignment at counter
-          break;
+          Log(debug, "Optimality reached at line %u", __LINE__);
+          bool was_set = optimal.exchange(true, std::memory_order_acq_rel);
+          if (!was_set)
+            child.copyTo(opt_node, psize);
+          continue;
         }
-        if (child_info->fixed_assignments[index] == -1)
-          counter++;
+        else if (child.key <= UB)
+        {
+          children[i] = child;
+          children[i].value = child_info;
+          isValid[i] = true;
+          atomicIncr(stats.nodes_explored);
+        }
+        else
+        {
+          delete child_info;
+          atomicIncr(stats.nodes_pruned_incumbent);
+        }
       }
-      // printHostArray(child_info->fixed_assignments, psize, "Output fa");
-      // Update bounds of the child node
-      node child = node(best_node.key, child_info);
-      child_info->LB = update_bounds_GL(d_pinfo, child, tlaps[i], handles[i]);
-      child.key = child_info->LB;
-      if (child.key <= UB && child_info->level == psize)
+#pragma omp barrier
+#pragma omp single
       {
-        // Log(debug, "Code reached here\n");
-        Log(debug, "Optimality reached at line %u", __LINE__);
-        bool was_set = optimal.exchange(true, std::memory_order_acq_rel);
-        if (!was_set)
-          child.copyTo(opt_node, psize);
-        continue;
+        for (uint i = 0; i < psize - level; i++)
+        {
+          if (isValid[i])
+            heap.push(children[i]);
+        }
+        stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
+        delete best_node.value;
+        uint total_nodes = stats.nodes_explored + stats.nodes_pruned_incumbent;
+        if (total_nodes > 1000 * counter_1000)
+        {
+          Log(debug, "Total nodes explored: %u, exp: %u, pru: %u", total_nodes, stats.nodes_explored,
+              stats.nodes_pruned_incumbent);
+          Log(debug, "Heap size: %u", (uint)heap.size());
+          counter_1000++;
+        }
+        // reset the isValid array
+        isValid.assign(psize, false);
       }
-      else if (child.key <= UB)
-      {
-        children[i] = child;
-        children[i].value = child_info;
-        isValid[i] = true;
-        atomicIncr(stats.nodes_explored);
-      }
-      else
-      {
-        delete child_info;
-        atomicIncr(stats.nodes_pruned_incumbent);
-      }
-    }
-    for (uint i = 0; i < psize - level; i++)
-    {
-      if (isValid[i])
-        heap.push(children[i]);
-    }
-    stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
-    delete best_node.value;
-    uint total_nodes = stats.nodes_explored + stats.nodes_pruned_incumbent;
-    if (total_nodes > 1000 * counter_1000)
-    {
-      Log(debug, "Total nodes explored: %u, exp: %u, pru: %u", total_nodes, stats.nodes_explored,
-          stats.nodes_pruned_incumbent);
-      Log(debug, "Heap size: %u", (uint)heap.size());
-      counter_1000++;
-    }
-    // reset the isValid array
-    isValid.assign(psize, false);
-  }
-
+    } // end while
+  } // end parallel
   if (optimal.load(std::memory_order_relaxed))
     Log(critical, "Optimal solution found with objective %u", (uint)opt_node.key);
   else
