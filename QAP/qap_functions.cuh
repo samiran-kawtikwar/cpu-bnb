@@ -112,8 +112,9 @@ void populate_costs(const problem_info info, const uint i, const uint k, const i
 }
 
 template <typename cost_type = uint>
-cost_type update_bounds_GL(const problem_info &pinfo, node &node, TLAP<cost_type> &tlap)
+cost_type update_bounds_GL(const problem_info &pinfo, node &node, TLAP<cost_type> &tlap, GL_handle *handle)
 {
+  CUDA_RUNTIME(cudaSetDevice(handle->deviceId));
   static Timer t;
   const uint N = pinfo.N;
   cost_type *dist = pinfo.distances;
@@ -132,14 +133,13 @@ cost_type update_bounds_GL(const problem_info &pinfo, node &node, TLAP<cost_type
   double *z = new double[N * N];
   HungarianAlgorithm HungAlgo;
   TILED_HANDLE<cost_type> th = tlap.th;
-  int *dfa, *dla;
-  CUDA_RUNTIME(cudaMalloc((void **)&dfa, N * sizeof(int)));
-  CUDA_RUNTIME(cudaMalloc((void **)&dla, N * sizeof(int)));
-  CUDA_RUNTIME(cudaMemcpy(dfa, fa, N * sizeof(int), cudaMemcpyHostToDevice));
-  CUDA_RUNTIME(cudaMemcpy(dla, la, N * sizeof(int), cudaMemcpyHostToDevice));
+  int *dfa = handle->fa, *dla = handle->la;
 
-  execKernel(populate_costs<cost_type>, N * N, BlockSize, 0, false, N, dfa, dla, dist, flows, th);
-  // execKernel(THA<cost_type>, N * N, BlockSize, 0, false, tlap.th);
+  CUDA_RUNTIME(cudaMemcpyAsync(dfa, fa, N * sizeof(int), cudaMemcpyHostToDevice, handle->stream));
+  CUDA_RUNTIME(cudaMemcpyAsync(dla, la, N * sizeof(int), cudaMemcpyHostToDevice, handle->stream));
+  CUDA_RUNTIME(cudaStreamSynchronize(handle->stream));
+
+  execKernelStream(populate_costs<cost_type>, N * N, BlockSize, handle->stream, false, N, dfa, dla, dist, flows, th);
   // printDeviceArray<cost_type>(th.objective, N * N, "Objectives");
   for (uint i = 0; i < N; i++)
   {
@@ -158,7 +158,5 @@ cost_type update_bounds_GL(const problem_info &pinfo, node &node, TLAP<cost_type
   delete[] z;
   delete[] temp_ass;
   delete[] la;
-  CUDA_RUNTIME(cudaFree(dfa));
-  CUDA_RUNTIME(cudaFree(dla));
   return cost_type(GL_bound);
 }

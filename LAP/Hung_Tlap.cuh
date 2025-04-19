@@ -40,14 +40,14 @@ public:
   {
     h_nrows = size;
     h_ncols = size;
-    CUDA_RUNTIME(cudaSetDevice(dev_));
+    CUDA_RUNTIME(cudaSetDevice(dev));
     CUDA_RUNTIME(cudaMemcpyToSymbol(NPROB, &nprob_, sizeof(NPROB)));
     CUDA_RUNTIME(cudaMemcpyToSymbol(SIZE, &size, sizeof(SIZE)));
     CUDA_RUNTIME(cudaMemcpyToSymbol(nrows, &h_nrows, sizeof(SIZE)));
     CUDA_RUNTIME(cudaMemcpyToSymbol(ncols, &h_ncols, sizeof(SIZE)));
 
     maxtile = nproblem;
-    Log(debug, "Allocating memory for %d problems", maxtile);
+    // Log(debug, "Allocating memory for %d problems", maxtile);
 
     // external memory
     CUDA_RUNTIME(cudaMalloc((void **)&th.cost, maxtile * size * size * sizeof(cost_type)));

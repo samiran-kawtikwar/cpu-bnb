@@ -31,3 +31,27 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
     CUDA_RUNTIME(cudaGetLastError());                                                         \
     CUDA_RUNTIME(cudaDeviceSynchronize());                                                    \
   }
+
+#define execKernelStream(kernel, gridSize, blockSize, __stream, verbose, ...) \
+  {                                                                           \
+    /* 1) Prep */                                                             \
+    dim3 grid(gridSize);                                                      \
+    dim3 block(blockSize);                                                    \
+    if (verbose)                                                              \
+      Log(info, "Launching %s on stream %p with nblocks:%u, blockDim:%u",     \
+          #kernel, (void *)__stream, gridSize, blockSize);                    \
+    kernel<<<grid, block, 0, __stream>>>(__VA_ARGS__);                        \
+    CUDA_RUNTIME(cudaGetLastError());                                         \
+    CUDA_RUNTIME(cudaStreamSynchronize(__stream));                            \
+  }
+
+inline cudaStream_t &thread_stream()
+{
+  static thread_local cudaStream_t s = []
+  {
+    cudaStream_t tmp;
+    cudaStreamCreate(&tmp);
+    return tmp;
+  }();
+  return s;
+}

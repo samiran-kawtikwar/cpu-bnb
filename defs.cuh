@@ -86,3 +86,24 @@ struct bnb_stats
     nodes_pruned_infeasible = 0;
   }
 };
+
+struct GL_handle
+{
+  cudaStream_t stream;
+  int *fa, *la, deviceId;
+
+  __host__ GL_handle(const uint psize, int devId)
+  {
+    deviceId = devId;
+    CUDA_RUNTIME(cudaSetDevice(devId));
+    CUDA_RUNTIME(cudaMalloc((void **)&fa, psize * sizeof(int)));
+    CUDA_RUNTIME(cudaMalloc((void **)&la, psize * sizeof(int)));
+    CUDA_RUNTIME(cudaStreamCreate(&stream));
+  };
+  __host__ ~GL_handle()
+  {
+    CUDA_RUNTIME(cudaFree(fa));
+    CUDA_RUNTIME(cudaFree(la));
+    CUDA_RUNTIME(cudaStreamDestroy(stream));
+  };
+};
