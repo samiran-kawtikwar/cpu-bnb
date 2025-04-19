@@ -75,7 +75,7 @@ cost_type update_bounds_GL(const problem_info *pinfo, node &node, cost_type UB)
   // printHostArray(la, N, "la");
   double *z = new double[N * N];
 
-#pragma omp parallel for
+  // #pragma omp parallel for
   for (uint id = 0; id < N * N; id++)
   {
     uint i = id / N;
