@@ -72,7 +72,7 @@ int main(int argc, char **argv)
     // Log(debug, "Starting iteration# %u", iter++);
     // get the best node from the heap
     node best_node = node(0, new node_info(psize));
-    best_node.copy(heap.top(), psize);
+    best_node.copyFrom(heap.top(), psize);
     delete heap.top().value;
     heap.pop();
     uint level = best_node.value->level;
@@ -112,12 +112,10 @@ int main(int argc, char **argv)
       if (child.key <= UB && level + 1 == psize)
       {
         // Log(debug, "Code reached here\n");
-        Log(critical, "Optimality reached at %u", __LINE__);
+        Log(debug, "Optimality reached at line %u", __LINE__);
         bool was_set = optimal.exchange(true, std::memory_order_acq_rel);
         if (!was_set)
-        {
-          opt_node.copy(child, psize);
-        }
+          child.copyTo(opt_node, psize);
         break;
       }
       else if (child.key <= UB)

@@ -31,6 +31,13 @@ struct node_info
   {
     free(fixed_assignments);
   };
+  __host__ void deepcopy(node_info *other, const uint psize)
+  {
+    other->LB = LB;
+    other->level = level;
+    other->id = id;
+    memcpy(other->fixed_assignments, fixed_assignments, sizeof(int) * psize);
+  }
 };
 
 struct node
@@ -45,13 +52,15 @@ struct node
     return key > other.key;
   }
   // ~node() { delete[] value; };
-  void copy(node other, uint psize) // copies node and node_info
+  void copyTo(node &other, uint psize) // copies node and node_info
   {
-    key = other.key;
-    value->LB = other.value->LB;
-    value->level = other.value->level;
-    value->id = other.value->id;
-    memcpy(value->fixed_assignments, other.value->fixed_assignments, sizeof(int) * psize);
+    other.key = key;                     // copies to other->key
+    value->deepcopy(other.value, psize); // copies to other->value
+  }
+  void copyFrom(const node &other, uint psize) // copies node and node_info
+  {
+    key = other.key;                     // copies from other->key
+    other.value->deepcopy(value, psize); // copies from other->value
   }
   __host__ void print(const uint psize, std::string message = "NULL")
   {
