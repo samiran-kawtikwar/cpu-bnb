@@ -82,13 +82,8 @@ int main(int argc, char **argv)
       // Branch on the best node to create (psize - level) new children nodes
       // Create a new child node
       node_info *child_info = new node_info(psize);
-      child_info->LB = best_node.value->LB;
+      best_node.value->deepcopy(child_info, psize);
       child_info->level = level + 1;
-      // copy the fixed assignments of the best node to the child
-      for (uint j = 0; j < psize; j++)
-      {
-        child_info->fixed_assignments[j] = best_node.value->fixed_assignments[j];
-      }
       // Log<colon>(info, "Level %u, child %u", level, i);
       // printHostArray(child_info->fixed_assignments, psize, "Input fa");
       // Update fixed assignments of the child by updating the ith unassigned assignment to level
