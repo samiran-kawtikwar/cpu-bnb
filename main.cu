@@ -64,9 +64,8 @@ int main(int argc, char **argv)
     stats.nodes_explored++;
   }
   else
-  {
     stats.nodes_pruned_incumbent++;
-  }
+
   while (!optimal.load(std::memory_order_relaxed) && !heap.empty())
   {
     // Log(debug, "Starting iteration# %u", iter++);
@@ -104,7 +103,7 @@ int main(int argc, char **argv)
       node child = node(best_node.key, child_info);
       child_info->LB = update_bounds_GL(d_pinfo, child, tlaps[i]);
       child.key = child_info->LB;
-      if (child.key <= UB && level + 1 == psize)
+      if (child.key <= UB && child_info->level == psize)
       {
         // Log(debug, "Code reached here\n");
         Log(debug, "Optimality reached at line %u", __LINE__);
@@ -119,23 +118,20 @@ int main(int argc, char **argv)
         atomicIncr(stats.nodes_explored);
       }
       else
-      {
         atomicIncr(stats.nodes_pruned_incumbent);
-      }
     }
     stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
     delete best_node.value;
   }
 
   if (optimal.load(std::memory_order_relaxed))
-  {
     Log(critical, "Optimal solution found with objective %u", (uint)opt_node.key);
-  }
   else
     Log(critical, "Optimal solution not found: infeasible problem or wrong UB");
 
   Log(info, "Max heap size during execution: %lu", stats.max_heap_size);
-  Log(info, "Nodes Explored: %u, Incumbant: %u, Infeasible: %u", stats.nodes_explored, stats.nodes_pruned_incumbent, stats.nodes_pruned_infeasible);
+  Log(info, "Nodes Explored: %u, Incumbant: %u, Infeasible: %u", stats.nodes_explored,
+      stats.nodes_pruned_incumbent, stats.nodes_pruned_infeasible);
 
   Log(info, "Exiting program");
   Log(info, "Total time taken: %f sec", t.elapsed());
