@@ -113,10 +113,10 @@ problem_info *generate_problem(Config &config, const int seed = 45345)
 }
 
 template <typename cost_type = uint>
-void print(problem_info *info, bool print_distances = true, bool print_flows = true)
+void print(problem_info *pinfo, bool print_distances = true, bool print_flows = true)
 {
-  uint N = info->N;
-  Log(debug, "Optimal objective: %u", info->opt_objective);
+  uint N = pinfo->N;
+  Log(info, "Optimal objective: %u", pinfo->opt_objective);
   if (print_distances)
   {
     Log(debug, "Distances: ");
@@ -124,7 +124,7 @@ void print(problem_info *info, bool print_distances = true, bool print_flows = t
     {
       for (size_t j = 0; j < N; j++)
       {
-        printf("%u, ", info->distances[i * N + j]);
+        printf("%u, ", pinfo->distances[i * N + j]);
       }
       printf("\n");
     }
@@ -136,7 +136,7 @@ void print(problem_info *info, bool print_distances = true, bool print_flows = t
     {
       for (size_t j = 0; j < N; j++)
       {
-        printf("%u, ", info->flows[i * N + j]);
+        printf("%u, ", pinfo->flows[i * N + j]);
       }
       printf("\n");
     }
