@@ -1,6 +1,9 @@
 #pragma once
 #include <random>
 #include <fstream>
+#include <stdexcept>
+#include <string>
+
 #include "config.h"
 #include "problem_info.h"
 #include "gurobi_solver.h"
@@ -9,6 +12,46 @@
 #include "../defs.cuh"
 
 using namespace std;
+
+// Download a URL to local_path (using wget), then open it in an ifstream.
+// Throws std::runtime_error on failure.
+std::ifstream download_and_open(const std::string &raw_url,
+                                const std::string &local_path)
+{
+  // Build the wget command: -q for quiet, -O to set output filename
+  std::string cmd = "wget -q -O " + local_path + " " + raw_url;
+  int rc = std::system(cmd.c_str());
+  if (rc != 0)
+  {
+    throw std::runtime_error("Download failed (exit code " +
+                             std::to_string(rc) + ")");
+  }
+
+  std::ifstream in(local_path, std::ios::binary);
+  if (!in.is_open())
+  {
+    throw std::runtime_error("Failed to open file \"" + local_path + "\"");
+  }
+
+  // Delete the directory entry immediately.
+  // On POSIX, `in` stays valid; on Windows this will error.
+  if (std::remove(local_path.c_str()) != 0)
+    std::perror(("Warning: could not delete temp file " + local_path).c_str());
+
+  return in;
+}
+
+// Convenience overload: just pass the instance name (e.g. "chr12a.dat")
+// and it will format the raw‑GitHub URL for your repo.
+std::ifstream download_instance(const std::string &instance_name)
+{
+  const std::string base =
+      "https://raw.githubusercontent.com/"
+      "samiran-kawtikwar/QAPLIB-instances/"
+      "main/instances/";
+  std::string url = base + instance_name;
+  return download_and_open(url, instance_name);
+}
 
 template <typename cost_type = uint>
 problem_info *generate_problem(Config &config, const int seed = 45345)
@@ -56,8 +99,7 @@ problem_info *generate_problem(Config &config, const int seed = 45345)
   else if (config.problemType == qaplib)
   {
     // Read distances and flows from file
-    string fileAddress = string("./QAP/instances/") + config.inputfile;
-    ifstream infile(fileAddress.c_str());
+    ifstream infile = download_instance(config.inputfile);
     if (!infile.is_open())
     {
       Log(error, "Could not open input file: %s", config.inputfile);
@@ -88,7 +130,7 @@ problem_info *generate_problem(Config &config, const int seed = 45345)
 
       if (counter < 2 * n * n)
       {
-        std::cerr << "Error: input size mismatch: " << fileAddress << std::endl;
+        std::cerr << "Error: input size mismatch: " << config.inputfile << std::endl;
         exit(1);
       }
 
@@ -113,30 +155,30 @@ problem_info *generate_problem(Config &config, const int seed = 45345)
 }
 
 template <typename cost_type = uint>
-void print(problem_info *info, bool print_distances = true, bool print_flows = true)
+void print(problem_info *pinfo, bool print_distances = true, bool print_flows = true)
 {
-  uint N = info->N;
-  Log(debug, "Optimal objective: %u", info->opt_objective);
+  uint N = pinfo->N;
+  Log(info, "Optimal objective: %u", pinfo->opt_objective);
   if (print_distances)
   {
-    Log(debug, "Distances: ");
+    Log(warn, "Distances: ");
     for (size_t i = 0; i < N; i++)
     {
       for (size_t j = 0; j < N; j++)
       {
-        printf("%u, ", info->distances[i * N + j]);
+        printf("%u, ", pinfo->distances[i * N + j]);
       }
       printf("\n");
     }
   }
   if (print_flows)
   {
-    Log(debug, "Flows: ");
+    Log(warn, "Flows: ");
     for (size_t i = 0; i < N; i++)
     {
       for (size_t j = 0; j < N; j++)
       {
-        printf("%u, ", info->flows[i * N + j]);
+        printf("%u, ", pinfo->flows[i * N + j]);
       }
       printf("\n");
     }
