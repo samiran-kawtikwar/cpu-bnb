@@ -45,3 +45,4 @@ qap_results/**
 # log/environment files
 *.log
 *.json
+*.supp
