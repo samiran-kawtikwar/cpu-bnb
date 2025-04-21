@@ -37,7 +37,7 @@ bin/**
 scripts/**
 logs/**
 QAP/instances/**
-qap_results/**
+qap_results*/**
 
 #vscode
 .vscode/**
