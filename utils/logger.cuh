@@ -99,9 +99,9 @@ void printHostArray(const cost_type *h_array, size_t len, std::string name = "NU
   if (name != "NULL")
   {
     if (len < 1)
-      Log(debug, "%s", name.c_str());
+      Log(info, "%s", name.c_str());
     else
-      Log<colon>(debug, "%s", name.c_str());
+      Log<colon>(info, "%s", name.c_str());
   }
   if (len >= 1)
   {
@@ -119,7 +119,7 @@ void printHostMatrix(const cost_type *matrix, size_t nrows, size_t ncols, std::s
   using namespace std;
   if (name != "NULL")
   {
-    Log(debug, "%s", name.c_str());
+    Log(info, "%s", name.c_str());
   }
   for (size_t j = 0; j < nrows; j++)
   {

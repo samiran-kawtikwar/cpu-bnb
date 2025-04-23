@@ -129,6 +129,7 @@ cost_type update_bounds_GL(const problem_info &pinfo, node &node, TLAP<cost_type
     if (fa[i] > -1)
       la[fa[i]] = i;
   }
+  // printHostArray(fa, N, "fa");
   // printHostArray(la, N, "la");
   double *z = new double[N * N];
   HungarianAlgorithm HungAlgo;

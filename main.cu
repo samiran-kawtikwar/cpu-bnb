@@ -112,7 +112,7 @@ int main(int argc, char **argv)
         best_node.value->deepcopy(child_info, psize);
         child_info->level = level + 1;
         // Log<colon>(info, "Level %u, child %u", level, i);
-        // printHostArray(child_info->fixed_assignments, psize, "Input fa");
+        // printHostArray(child_info->fixed_assignments, psize, "\nPopped fa");
         // Update fixed assignments of the child by updating the ith unassigned assignment to level
         uint counter = 0;
         for (uint index = 0; index < psize; index++)
@@ -131,10 +131,12 @@ int main(int argc, char **argv)
         node child = node(best_node.key, child_info);
         child_info->LB = update_bounds_GL(d_pinfo, child, tlaps[i], handles[i]);
         child.key = child_info->LB;
+        // Log<nun>(info, "Processed node \t");
+        // Log<nun>(warn, "LB: %u\n", (uint)child.key);
         if (child.key <= UB && child_info->level == psize)
         {
           // Log(debug, "Code reached here\n");
-          Log(debug, "Optimality reached at line %u", __LINE__);
+          // Log(debug, "Optimality reached at line %u", __LINE__);
           bool was_set = optimal.exchange(true, std::memory_order_acq_rel);
           if (!was_set)
             child.copyTo(opt_node, psize);
