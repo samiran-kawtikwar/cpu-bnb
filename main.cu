@@ -8,7 +8,7 @@
 #include "LAP/device_utils.cuh"
 #include "LAP/Hung_lap.cuh"
 #include "LAP/lap_kernels.cuh"
-
+#include <omp.h>
 #include "QAP/config.h"
 #include "QAP/problem_generator.h"
 #include "QAP/gurobi_solver.h"
@@ -27,7 +27,7 @@ int main(int argc, char **argv)
   size_t psize = h_problem_info->N;
   cost_type UB = h_problem_info->opt_objective;
 
-  Log(debug, "Solving QAP with Branching");
+  Log(info, "Solving QAP with Branching");
   Timer t = Timer();
   // Define a heap from the standard priority queue package
   std::priority_queue<node, std::vector<node>, std::greater<node>> heap;
@@ -37,91 +37,82 @@ int main(int argc, char **argv)
   root_info->LB = 0;
   root_info->level = 0;
   node root = node(0, root_info);
+  root.key = update_bounds_GL(h_problem_info, root);
+  root.value->LB = root.key;
   heap.push(root);
   stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
   // start branch and bound
   bool optimal = false;
+
+  if (!(root.key <= UB))
+    return -1; // infeasible problem
   node opt_node = node(0, new node_info(psize));
   // Log(debug, " Subgrad on root node");
-  // root.key = update_bounds_GL(h_problem_info, root, UB);
   // Log(debug, "Root node key %u", (uint)root.key);
+  std::vector<node> children(psize);
 
-  do
+  while (!optimal || !heap.empty())
   {
-    // Log(debug, "Starting iteration# %u", iter++);
-    // get the best node from the heap
+    static uint iter = 0;
     node best_node = node(0, new node_info(psize));
-    best_node.copy(heap.top(), psize);
+    best_node.copyFrom(heap.top(), psize);
     delete heap.top().value;
     heap.pop();
-    // Log(info, "best node key %u", (uint)best_node.key);
-    // Update bound of the best node
-    // update_bounds(h_problem_info, best_node);
-    // printHostArray(best_node.value->fixed_assignments, psize, "Solving node with fa: ");
-    best_node.key = update_bounds_GL(h_problem_info, best_node, UB);
-    // Log(debug, "Solved... LB: %u, level: %u", (uint)best_node.key, best_node.value->level);
-
     uint level = best_node.value->level;
-    if (best_node.key <= UB && best_node.value->level == psize)
+    Log(debug, "Starting iteration %u from node with bound %u, level %u", ++iter, best_node.key, best_node.value->level);
+
+    for (uint i = 0; i < psize - level; i++)
     {
-      optimal = true;
-      Log(critical, "Optimality Reached");
-      opt_node.copy(best_node, psize);
-      delete best_node.value;
-      break;
-    }
-    else if (best_node.key <= UB)
-    {
-      stats.nodes_explored++;
-      // Branch on the best node to create (psize - level) new children nodes
-      for (uint i = 0; i < psize - level; i++)
+      // Create a new child node
+      node_info *child_info = new node_info(psize);
+      best_node.value->deepcopy(child_info, psize);
+      child_info->level = level + 1;
+      // Update fixed assignments of the child by updating the ith unassigned assignment to level
+      uint counter = 0;
+      for (uint index = 0; index < psize; index++)
       {
-        // Create a new child node
-        node_info *child_info = new node_info(psize);
-        child_info->LB = best_node.value->LB;
-        child_info->level = level + 1;
-        for (uint j = 0; j < psize; j++)
+        if (counter == i && child_info->fixed_assignments[index] == -1)
         {
-          child_info->fixed_assignments[j] = best_node.value->fixed_assignments[j];
+          child_info->fixed_assignments[index] = level;
+          break;
         }
-
-        // Update fixed assignments of the child by updating the ith unassigned assignment to level
-        uint counter = 0;
-        for (uint index = 0; index < psize; index++)
-        {
-          if (counter == i && child_info->fixed_assignments[index] == -1)
-          {
-            // Log(debug, "Code reached here\n");
-            child_info->fixed_assignments[index] = level;
-
-            break;
-          }
-          if (child_info->fixed_assignments[index] == -1)
-            counter++;
-        }
-
-        node child = node(best_node.key, child_info);
-        heap.push(child);
+        if (child_info->fixed_assignments[index] == -1)
+          counter++;
       }
-      stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
+      children[i].value = child_info;
     }
-    else
+#pragma omp parallel
     {
-      // Prune the node
-      stats.nodes_pruned_incumbent++;
+#pragma omp single
+      update_bounds_poly_GL_parallel(h_problem_info, level, children);
     }
-
-    delete best_node.value;
-  } while (!optimal || !heap.empty());
+    for (uint i = 0; i < psize - level; i++)
+    {
+      if (children[i].key <= UB && children[i].value->level == psize)
+      {
+        optimal = true;
+        children[i].copyTo(opt_node, psize);
+        break;
+      }
+      else if (children[i].key <= UB)
+      {
+        heap.push(children[i]);
+        stats.nodes_explored++;
+        stats.max_heap_size = max(stats.max_heap_size, (uint)heap.size());
+      }
+      else
+      {
+        delete children[i].value;
+        stats.nodes_pruned_incumbent++;
+      }
+    }
+  }
 
   if (optimal)
-  {
     Log(critical, "Optimal solution found with objective %u", (uint)opt_node.key);
-  }
   else
-  {
     Log(critical, "Optimal solution not found");
-  }
+
   Log(info, "Max heap size during execution: %lu", stats.max_heap_size);
   Log(info, "Nodes Explored: %u, Incumbant: %u, Infeasible: %u", stats.nodes_explored, stats.nodes_pruned_incumbent, stats.nodes_pruned_infeasible);
 

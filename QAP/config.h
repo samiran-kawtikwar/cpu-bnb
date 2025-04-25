@@ -4,7 +4,6 @@
 #include <unistd.h>
 
 typedef unsigned int uint;
-typedef uint cost_type;
 
 enum ProblemType
 {
