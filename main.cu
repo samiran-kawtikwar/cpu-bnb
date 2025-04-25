@@ -53,12 +53,14 @@ int main(int argc, char **argv)
 
   while (!optimal || !heap.empty())
   {
+    uint level;
+
     static uint iter = 0;
     node best_node = node(0, new node_info(psize));
     best_node.copyFrom(heap.top(), psize);
     delete heap.top().value;
     heap.pop();
-    uint level = best_node.value->level;
+    level = best_node.value->level;
     Log(debug, "Starting iteration %u from node with bound %u, level %u", ++iter, best_node.key, best_node.value->level);
 
     for (uint i = 0; i < psize - level; i++)
@@ -81,11 +83,9 @@ int main(int argc, char **argv)
       }
       children[i].value = child_info;
     }
-#pragma omp parallel
-    {
-#pragma omp single
-      update_bounds_poly_GL_parallel(h_problem_info, level, children);
-    }
+
+    update_bounds_poly_GL_parallel(h_problem_info, level, children);
+
     for (uint i = 0; i < psize - level; i++)
     {
       if (children[i].key <= UB && children[i].value->level == psize)
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
         stats.nodes_pruned_incumbent++;
       }
     }
-  }
+  } // End while
 
   if (optimal)
     Log(critical, "Optimal solution found with objective %u", (uint)opt_node.key);

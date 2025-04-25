@@ -179,7 +179,7 @@ void update_bounds_poly_GL_parallel(const problem_info *pinfo,
   std::vector<double> Z(nCh * N * N, DBL_MAX);
 
 // 1) build la for each child
-#pragma omp for schedule(static)
+#pragma omp parallel for schedule(static)
   for (uint c = 0; c < nCh; ++c)
   {
     auto &la = las[c];
@@ -190,9 +190,9 @@ void update_bounds_poly_GL_parallel(const problem_info *pinfo,
         la[fa[i]] = int(i);
     // Z is already initialized to DBL_MAX
   }
-  Log(info, "populated la");
+
 // 2) fill z[c,i,k] in one big 3-D loop
-#pragma omp for collapse(3) schedule(dynamic)
+#pragma omp parallel for collapse(3) schedule(dynamic)
   for (uint c = 0; c < nCh; ++c)
   {
     for (uint i = 0; i < N; ++i)
@@ -219,9 +219,9 @@ void update_bounds_poly_GL_parallel(const problem_info *pinfo,
       }
     }
   }
-  Log(info, "found z matrices");
+
 // 3) final LAP on each child's Z-block
-#pragma omp for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
   for (uint c = 0; c < nCh; ++c)
   {
     double glb = 0.0;
