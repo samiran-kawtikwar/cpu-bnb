@@ -44,3 +44,4 @@ QAP/instances/**
 # log/environment files
 *.log
 *.json
+valgrind-cuda.supp
