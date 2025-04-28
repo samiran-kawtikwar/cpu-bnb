@@ -36,6 +36,8 @@ build/**
 bin/**
 scripts/**
 logs/**
+scratch/** 
+qap_results*/**
 
 #vscode
 .vscode/**
