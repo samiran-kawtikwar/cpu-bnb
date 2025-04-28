@@ -37,6 +37,7 @@ bin/**
 scripts/**
 logs/**
 qap_results*/**
+scratch/**
 
 #vscode
 .vscode/**
@@ -45,3 +46,4 @@ qap_results*/**
 *.log
 *.json
 valgrind-cuda.supp
+LAP-cpu/**
