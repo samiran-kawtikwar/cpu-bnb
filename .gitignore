@@ -37,6 +37,7 @@ bin/**
 scripts/**
 logs/**
 qap_results*/**
+results/**
 
 #vscode
 .vscode/**
