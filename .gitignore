@@ -36,6 +36,7 @@ build/**
 bin/**
 scripts/**
 logs/**
+results/**
 qap_results*/**
 scratch/**
 
