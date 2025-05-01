@@ -64,6 +64,12 @@ struct node
     value->id = other.value->id;
     memcpy(value->fixed_assignments, other.value->fixed_assignments, sizeof(int) * psize);
   }
+  template <typename... Args>
+  void print(const char *message, Args... args)
+  {
+    printf(message, args...);
+    Log<nun>(info, "Key: %f, level: %u\n", key, value->level);
+  }
 };
 
 struct bnb_stats
