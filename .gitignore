@@ -38,6 +38,7 @@ scripts/**
 logs/**
 scratch/** 
 qap_results*/**
+results/**
 
 #vscode
 .vscode/**
