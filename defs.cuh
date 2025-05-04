@@ -21,9 +21,9 @@ struct problem_info
 
   ~problem_info()
   {
-    delete[] costs;
-    delete[] weights;
-    delete[] budgets;
+    CUDA_RUNTIME(cudaFree(costs));
+    CUDA_RUNTIME(cudaFree(weights));
+    CUDA_RUNTIME(cudaFree(budgets));
   }
 };
 

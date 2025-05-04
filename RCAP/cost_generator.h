@@ -3,7 +3,9 @@
 #include <omp.h>
 #include <thread>
 #include <fstream>
+#include <cuda.h>
 #include "config.h"
+#include "../utils/cuda_utils.cuh"
 #include "../utils/timer.h"
 #include "../utils/logger.cuh"
 #include "../defs.cuh"
@@ -19,7 +21,8 @@ T *generate_cost(Config config, const int seed = 45345)
   double frac = config.frac;
   double range = frac * user_n;
 
-  T *cost = new T[user_n * user_n];
+  T *cost;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&cost, user_n * user_n * sizeof(T)));
   memset(cost, 0, user_n * user_n * sizeof(T));
 
   // use all available CPU threads for generating cost
@@ -102,7 +105,8 @@ T *generate_weights(Config config, int seed = 45345)
   double frac = config.frac;
   double range = frac * N / 10;
 
-  T *weights = new T[N * N * K];
+  T *weights;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&weights, N * N * K * sizeof(T)));
   memset(weights, 0, N * N * K * sizeof(T));
 
   // use all available CPU threads for generating cost
@@ -136,7 +140,8 @@ T *get_budgets(T *weights, Config config)
 {
   size_t N = config.user_n;
   size_t K = config.user_ncommodities;
-  T *budgets = new T[K];
+  T *budgets;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&budgets, K * sizeof(T)));
   memset(budgets, 0, K * sizeof(T));
   uint nthreads = min(K, (size_t)thread::hardware_concurrency() - 3); // remove 3 threads for OS and other tasks
   uint commodities_per_thread = ceil((K * 1.0) / nthreads);
