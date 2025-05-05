@@ -4,9 +4,9 @@
 
 struct subgrad_space
 {
-  float *mult, *g, *lap_costs, *LB, *real_obj, *max_LB;
+  float *mult, *g, *lap_costs, *LB, *real_obj, *max_LB, *UB;
   int *X;
-  int *col_fixed_assignments;
+  int *row_fa, *col_fa;
   TLAP<float> T;
   __host__ void allocate(uint N, uint K, uint nworkers = 0, uint devID = 0)
   {
@@ -19,7 +19,9 @@ struct subgrad_space
     CUDA_RUNTIME(cudaMalloc((void **)&LB, nworkers * MAX_ITER * sizeof(float)));
     CUDA_RUNTIME(cudaMalloc((void **)&max_LB, nworkers * sizeof(float)));
     CUDA_RUNTIME(cudaMalloc((void **)&real_obj, nworkers * sizeof(float)));
-    CUDA_RUNTIME(cudaMalloc((void **)&col_fixed_assignments, nworkers * N * sizeof(int)));
+    CUDA_RUNTIME(cudaMalloc((void **)&row_fa, nworkers * N * sizeof(int)));
+    CUDA_RUNTIME(cudaMalloc((void **)&col_fa, nworkers * N * sizeof(int)));
+    CUDA_RUNTIME(cudaMallocManaged((void **)&UB, sizeof(float)));
 
     CUDA_RUNTIME(cudaMemset(mult, 0, nworkers * K * sizeof(float)));
     CUDA_RUNTIME(cudaMemset(g, 0, nworkers * K * sizeof(float)));
@@ -28,7 +30,8 @@ struct subgrad_space
     CUDA_RUNTIME(cudaMemset(LB, 0, nworkers * MAX_ITER * sizeof(float)));
     CUDA_RUNTIME(cudaMemset(max_LB, 0, nworkers * sizeof(float)));
     CUDA_RUNTIME(cudaMemset(real_obj, 0, nworkers * sizeof(float)));
-    CUDA_RUNTIME(cudaMemset(col_fixed_assignments, 0, nworkers * N * sizeof(int)));
+    CUDA_RUNTIME(cudaMemset(row_fa, -1, nworkers * N * sizeof(int)));
+    CUDA_RUNTIME(cudaMemset(col_fa, -1, nworkers * N * sizeof(int)));
 
     T = TLAP<float>(nworkers, N, devID);
     // T.allocate(nworkers, N, devID);
@@ -42,8 +45,25 @@ struct subgrad_space
     CUDA_RUNTIME(cudaFree(real_obj));
     CUDA_RUNTIME(cudaFree(max_LB));
     CUDA_RUNTIME(cudaFree(X));
-    CUDA_RUNTIME(cudaFree(col_fixed_assignments));
+    CUDA_RUNTIME(cudaFree(row_fa));
+    CUDA_RUNTIME(cudaFree(col_fa));
+    CUDA_RUNTIME(cudaFree(UB));
     T.clear();
+  }
+
+  static void allocate_all(subgrad_space *d_subgrad_space, size_t nworkers, size_t N, size_t K, uint devID)
+  {
+    for (size_t i = 0; i < nworkers; i++)
+    {
+      d_subgrad_space[i].allocate(N, K, nworkers, devID);
+    }
+  }
+  static void free_all(subgrad_space *d_subgrad_space, size_t nworkers)
+  {
+    for (size_t i = 0; i < nworkers; i++)
+    {
+      d_subgrad_space[i].clear();
+    }
   }
 };
 
@@ -143,12 +163,67 @@ __device__ void subgrad_solver_tile(const problem_info *pinfo, TILE tile,
   sync(tile);
 }
 
-__global__ void g_subgrad_solver(const problem_info *pinfo, subgrad_space *space, float UB)
+__device__ void update_bounds_subgrad(const problem_info *pinfo, TILE tile,
+                                      subgrad_space *space, float *UB, node *a,
+                                      int *row_fa, int *col_fa,
+                                      PARTITION_HANDLE<float> &ph)
+{
+
+  const uint tile_id = tile.meta_group_rank();
+  // if (tile.thread_rank() == 0)
+  //   row_fa[tile_id] = a[0].value->fixed_assignments;
+  // sync(tile);
+  // Update UB using the current fixed assignments
+  for (int i = tile.thread_rank(); i < SIZE; i += TileSize)
+  {
+    if (row_fa[i] > -1)
+      atomicAdd(UB, (float)pinfo->costs[i * SIZE + row_fa[i]]);
+  }
+  sync(tile);
+
+  subgrad_solver_tile(pinfo, tile, space, UB[0], row_fa, col_fa, ph);
+  sync(tile);
+  if (tile.thread_rank())
+    a[0].key = space->max_LB[blockIdx.x * TilesPerBlock + tile.meta_group_rank()];
+  sync(tile);
+}
+
+__global__ void g_subgrad_solver(const problem_info *pinfo, subgrad_space *space, node *children,
+                                 bool *feasible, float global_UB)
 {
   __shared__ PARTITION_HANDLE<float> ph;
   cg::thread_block block = cg::this_thread_block();
   TILE tile = cg::tiled_partition<TileSize>(block);
 
   set_handles(tile, ph, space->T.th);
-  subgrad_solver_tile(pinfo, tile, space, UB, nullptr, nullptr, ph);
+  if (tile.thread_rank() == 0)
+    space[blockIdx.x].UB[0] = global_UB;
+  sync(tile);
+  if (feasible[blockIdx.x])
+  {
+    update_bounds_subgrad(pinfo, tile, space, space[blockIdx.x].UB, &children[blockIdx.x],
+                          space[blockIdx.x].row_fa, space[blockIdx.x].col_fa, ph);
+  }
+}
+
+void update_bounds_subgrad_gpu(const problem_info *pinfo, const uint nchild,
+                               std::vector<node> &h_children, node *d_children,
+                               subgrad_space *d_subgrad_space, bool *feasible,
+                               float global_UB, const uint dev_ = 0)
+{
+  // Launch the kernel
+  const uint N = pinfo->psize;
+  const uint K = pinfo->ncommodities;
+
+  // Launch the kernel
+  execKernel(g_subgrad_solver, nchild, BlockSize, dev_, false,
+             pinfo, d_subgrad_space, d_children, feasible, global_UB);
+  CUDA_RUNTIME(cudaDeviceSynchronize());
+  CUDA_RUNTIME(cudaMemcpy(h_children.data(), d_children, sizeof(node) * nchild, cudaMemcpyDeviceToHost));
+  for (uint i = 0; i < nchild; i++)
+  {
+    if (feasible[i])
+      h_children[i].value->LB = h_children[i].key;
+  }
+  return;
 }

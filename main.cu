@@ -55,7 +55,12 @@ int main(int argc, char **argv)
   Log(debug, "Creating space for subgrad solver");
   subgrad_space *d_subgrad_space; // managed by each subworker
   CUDA_RUNTIME(cudaMallocManaged((void **)&d_subgrad_space, psize * sizeof(subgrad_space)));
-  d_subgrad_space->allocate(psize, ncommodities, psize, dev_);
+  subgrad_space::allocate_all(d_subgrad_space, psize, psize, ncommodities, dev_);
+
+  Log(debug, "Creating space for feasibility check");
+  feasibility_space *d_feas_space;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&d_feas_space, psize * sizeof(feasibility_space)));
+  feasibility_space::allocate_all(d_feas_space, psize, ncommodities, psize, dev_);
 
   node_info *root_info = new node_info(psize);
   root_info->LB = 0;
@@ -84,10 +89,6 @@ int main(int argc, char **argv)
 
   node *d_children;
   CUDA_RUNTIME(cudaMalloc((void **)&d_children, psize * sizeof(node)));
-  // space for feasibility check
-  feasibility_space *d_feas_space;
-  CUDA_RUNTIME(cudaMallocManaged((void **)&d_feas_space, psize * sizeof(feasibility_space)));
-  feasibility_space::allocate_all(d_feas_space, psize, ncommodities, psize, dev_);
 
   while (!optimal && !heap.empty())
   {
@@ -127,8 +128,13 @@ int main(int argc, char **argv)
       feasible[i] = true;
     }
     // feas_check_parallel(h_problem_info, children, feasible);
-    feas_check_gpu(h_problem_info, children, feasible, d_children, d_feas_space, dev_);
-    update_bounds_subgrad_parallel(h_problem_info, children, feasible, UB);
+    feas_check_gpu(h_problem_info, psize - level, children, feasible, d_children, d_feas_space, dev_);
+    // copy row_fa from feasibility space to subgrad space
+    for (uint i = 0; i < psize - level; i++)
+      CUDA_RUNTIME(cudaMemcpy(d_subgrad_space[i].row_fa, d_feas_space[i].row_fa, sizeof(int) * psize, cudaMemcpyDeviceToDevice));
+    update_bounds_subgrad_gpu(h_problem_info, psize - level,
+                              children, d_children,
+                              d_subgrad_space, feasible, UB, dev_);
 
     for (uint i = 0; i < psize - level; i++)
     {
@@ -191,9 +197,9 @@ int main(int argc, char **argv)
 
   worker_info::free_all(d_worker_space, psize);
   CUDA_RUNTIME(cudaFree(d_worker_space));
-  d_subgrad_space->clear();
+  subgrad_space::free_all(d_subgrad_space, psize);
   CUDA_RUNTIME(cudaFree(d_subgrad_space));
-  feasibility_space::clear_all(d_feas_space, psize);
+  feasibility_space::free_all(d_feas_space, psize);
   CUDA_RUNTIME(cudaFree(d_feas_space));
   CUDA_RUNTIME(cudaFree(d_children));
 

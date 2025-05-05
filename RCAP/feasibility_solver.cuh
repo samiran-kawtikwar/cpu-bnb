@@ -36,7 +36,7 @@ struct feasibility_space
     for (uint i = 0; i < nworkers; i++)
       space[i].allocate(N, K, devID);
   }
-  static void clear_all(feasibility_space *space, uint nworkers)
+  static void free_all(feasibility_space *space, uint nworkers)
   {
     for (uint i = 0; i < nworkers; i++)
       space[i].clear();
@@ -115,11 +115,10 @@ __global__ void g_feas_check(const problem_info *pinfo, node *a,
              space[blockIdx.x].lap_costs_fa, feasible[blockIdx.x], ph);
 }
 
-void feas_check_gpu(const problem_info *pinfo, std::vector<node> &nodes, bool *feasible,
+void feas_check_gpu(const problem_info *pinfo, const uint nchild, std::vector<node> &nodes, bool *feasible,
                     node *d_children, feasibility_space *d_feas_space, const uint dev_ = 0)
 {
   const uint N = pinfo->psize;
-  uint nchild = N - nodes[0].value->level + 1;
 
   // copy children nodes to gpu
   CUDA_RUNTIME(cudaMemcpy(d_children, nodes.data(), sizeof(node) * nchild, cudaMemcpyHostToDevice));
