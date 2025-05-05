@@ -4,13 +4,18 @@
 // #define MAX_HEAP_SIZE 1000000
 #define MAX_TOKENS 100
 #define MAX_ITER 100
-#define MAX_DATA 0xffffffff
+// #define MAX_DATA 0xffffffff
 #define least_count 1e-6
 
 typedef unsigned long long int uint64;
 typedef unsigned int uint;
 typedef uint cost_type;
 typedef uint weight_type;
+
+#define BlockSize 64U
+#define TileSize 64U
+#define TilesPerBlock (BlockSize / TileSize)
+#define TILE cg::thread_block_tile<TileSize>
 
 struct problem_info
 {
@@ -69,6 +74,43 @@ struct node
   {
     printf(message, args...);
     Log<nun>(info, "Key: %f, level: %u\n", key, value->level);
+  }
+};
+
+struct worker_info
+{
+  node nodes[MAX_TOKENS];
+  float LB[MAX_TOKENS];
+  uint level[MAX_TOKENS];
+  bool feasible[MAX_TOKENS];
+  int *fixed_assignments; // To temporarily store fixed assignments
+
+  static void allocate_all(worker_info *d_worker_space, size_t nworkers, size_t psize)
+  {
+    for (size_t i = 0; i < nworkers; i++)
+    {
+      d_worker_space[i].allocate(psize);
+    }
+  }
+
+  // Static function to free memory for an array of work_info instances
+  static void free_all(worker_info *d_worker_space, size_t nworkers)
+  {
+    for (size_t i = 0; i < nworkers; i++)
+    {
+      d_worker_space[i].free();
+    }
+  }
+  // Function to allocate memory for this instance
+  void allocate(size_t psize)
+  {
+    CUDA_RUNTIME(cudaMalloc((void **)&fixed_assignments, psize * psize * sizeof(int)));
+    CUDA_RUNTIME(cudaMemset(fixed_assignments, 0, psize * psize * sizeof(int)));
+  }
+  // Function to free allocated memory for this instance
+  void free()
+  {
+    CUDA_RUNTIME(cudaFree(fixed_assignments));
   }
 };
 

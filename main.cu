@@ -6,13 +6,13 @@
 #include "utils/timer.h"
 #include "defs.cuh"
 #include "LAP/device_utils.cuh"
-#include "LAP/Hung_lap.cuh"
-#include "LAP/lap_kernels.cuh"
+#include "LAP/Hung_Tlap.cuh"
 
 #include "RCAP/config.h"
 #include "RCAP/cost_generator.h"
 #include "RCAP/gurobi_solver.h"
 #include "RCAP/rcap_functions.cuh"
+#include "RCAP/subgrad_solver.cuh"
 
 #include <queue>
 
@@ -21,6 +21,7 @@ int main(int argc, char **argv)
   Log(info, "Starting program");
   Config config = parseArgs(argc, argv);
   printConfig(config);
+  int dev_ = config.deviceId;
   uint psize = config.user_n;
   uint ncommodities = config.user_ncommodities;
 
@@ -45,6 +46,16 @@ int main(int argc, char **argv)
   std::priority_queue<node, std::vector<node>, std::greater<node>> heap;
   bnb_stats stats = bnb_stats();
 
+  Log(debug, "Creating scratch space for workers");
+  worker_info *d_worker_space;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&d_worker_space, sizeof(worker_info) * psize));
+  worker_info::allocate_all(d_worker_space, psize, psize); // max psize workers
+
+  Log(debug, "Creating space for subgrad solver");
+  subgrad_space *d_subgrad_space; // managed by each subworker
+  CUDA_RUNTIME(cudaMallocManaged((void **)&d_subgrad_space, psize * sizeof(subgrad_space)));
+  d_subgrad_space->allocate(psize, ncommodities, psize, dev_);
+
   node_info *root_info = new node_info(psize);
   root_info->LB = 0;
   root_info->level = 0;
@@ -65,7 +76,10 @@ int main(int argc, char **argv)
   // uint iter = 0;
 
   std::vector<node> children(psize);
-  std::vector<bool> feasible(psize, false);
+  // std::vector<bool> feasible(psize, false);
+  bool *feasible;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&feasible, sizeof(bool) * psize));
+  CUDA_RUNTIME(cudaMemset(feasible, 0, sizeof(bool) * psize));
 
   while (!optimal && !heap.empty())
   {
@@ -163,6 +177,13 @@ int main(int argc, char **argv)
 
   Log(info, "Exiting program");
   Log(info, "Total time taken: %f sec", t.elapsed());
+
+  CUDA_RUNTIME(cudaFree(feasible));
+
+  worker_info::free_all(d_worker_space, psize);
+  CUDA_RUNTIME(cudaFree(d_worker_space));
+  d_subgrad_space->clear();
+  CUDA_RUNTIME(cudaFree(d_subgrad_space));
 
   delete h_problem_info;
   while (!heap.empty())

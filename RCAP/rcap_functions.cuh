@@ -77,7 +77,7 @@ bool feas_check(const problem_info *pinfo, node &node)
   return feasible;
 }
 
-void feas_check_parallel(const problem_info *pinfo, std::vector<node> &nodes, std::vector<bool> feasible)
+void feas_check_parallel(const problem_info *pinfo, std::vector<node> &nodes, bool *feasible)
 {
   uint level = nodes[0].value->level - 1;
   const uint N = pinfo->psize, K = pinfo->ncommodities;
@@ -303,7 +303,7 @@ ret:
 }
 
 void update_bounds_subgrad_parallel(const problem_info *pinfo, std::vector<node> &nodes,
-                                    std::vector<bool> feasible, cost_type UB)
+                                    bool *feasible, cost_type UB)
 {
   uint level = nodes[0].value->level - 1;
   const uint N = pinfo->psize, K = pinfo->ncommodities;

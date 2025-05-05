@@ -2,6 +2,7 @@
 
 #include <cuda.h>
 #include "logger.cuh"
+#include <cub/cub.cuh>
 
 #define CUDA_RUNTIME(ans)                 \
   {                                       \
