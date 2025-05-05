@@ -484,6 +484,22 @@ fundef void step_6_add_sub_fused_compress_matrix(TILE tile, PARTITION_HANDLE<dat
   }
 }
 
+fundef void print_cost(TILE tile, data *cost, const size_t nrows, const size_t ncols)
+{
+  if (tile.thread_rank() == 0)
+  {
+    printf("Cost matrix:\n");
+    for (size_t i = 0; i < nrows; i++)
+    {
+      for (size_t j = 0; j < ncols; j++)
+      {
+        printf("%.0f ", cost[i * ncols + j]);
+      }
+      printf("\n");
+    }
+  }
+}
+
 fundef void get_objective(TILE tile, PARTITION_HANDLE<data> &ph)
 {
   data obj = 0;
@@ -497,6 +513,7 @@ fundef void get_objective(TILE tile, PARTITION_HANDLE<data> &ph)
     ph.objective[0] = obj;
 
   sync(tile);
+  // print_cost(tile, ph.cost, SIZE, SIZE);
 }
 
 fundef void PHA(TILE tile, PARTITION_HANDLE<data> &ph, const uint problemID = blockIdx.x)
@@ -617,7 +634,7 @@ fundef void PHA(TILE tile, PARTITION_HANDLE<data> &ph, const uint problemID = bl
   return;
 }
 
-fundef void PHA_fa(TILE tile, PARTITION_HANDLE<data> &ph, int *row_fa, int *col_fa, const int caller = 0)
+fundef void PHA_fa(TILE tile, PARTITION_HANDLE<data> &ph, const int *row_fa, int *col_fa, const int caller = 0)
 {
   if (row_fa != nullptr && col_fa != nullptr)
   {
@@ -625,11 +642,11 @@ fundef void PHA_fa(TILE tile, PARTITION_HANDLE<data> &ph, int *row_fa, int *col_
     {
       uint c = i % SIZE;
       uint r = i / SIZE;
-      if (row_fa[r] != 0 && row_fa[r] != c + 1)
+      if (row_fa[r] != -1 && row_fa[r] != c)
       {
         ph.cost[i] = (data)MAX_DATA;
       }
-      if (col_fa[c] != 0 && col_fa[c] != r + 1)
+      if (col_fa[c] != -1 && col_fa[c] != r)
       {
         ph.cost[i] = (data)MAX_DATA;
       }

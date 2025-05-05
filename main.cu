@@ -12,6 +12,7 @@
 #include "RCAP/cost_generator.h"
 #include "RCAP/gurobi_solver.h"
 #include "RCAP/rcap_functions.cuh"
+#include "RCAP/feasibility_solver.cuh"
 #include "RCAP/subgrad_solver.cuh"
 
 #include <queue>
@@ -81,6 +82,13 @@ int main(int argc, char **argv)
   CUDA_RUNTIME(cudaMallocManaged((void **)&feasible, sizeof(bool) * psize));
   CUDA_RUNTIME(cudaMemset(feasible, 0, sizeof(bool) * psize));
 
+  node *d_children;
+  CUDA_RUNTIME(cudaMalloc((void **)&d_children, psize * sizeof(node)));
+  // space for feasibility check
+  feasibility_space *d_feas_space;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&d_feas_space, psize * sizeof(feasibility_space)));
+  feasibility_space::allocate_all(d_feas_space, psize, ncommodities, psize, dev_);
+
   while (!optimal && !heap.empty())
   {
     // Log(debug, "Starting iteration# %u", iter++);
@@ -118,7 +126,8 @@ int main(int argc, char **argv)
       children[i].value = child_info;
       feasible[i] = true;
     }
-    feas_check_parallel(h_problem_info, children, feasible);
+    // feas_check_parallel(h_problem_info, children, feasible);
+    feas_check_gpu(h_problem_info, children, feasible, d_children, d_feas_space, dev_);
     update_bounds_subgrad_parallel(h_problem_info, children, feasible, UB);
 
     for (uint i = 0; i < psize - level; i++)
@@ -184,6 +193,9 @@ int main(int argc, char **argv)
   CUDA_RUNTIME(cudaFree(d_worker_space));
   d_subgrad_space->clear();
   CUDA_RUNTIME(cudaFree(d_subgrad_space));
+  feasibility_space::clear_all(d_feas_space, psize);
+  CUDA_RUNTIME(cudaFree(d_feas_space));
+  CUDA_RUNTIME(cudaFree(d_children));
 
   delete h_problem_info;
   while (!heap.empty())

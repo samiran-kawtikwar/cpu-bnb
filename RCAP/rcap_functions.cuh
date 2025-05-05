@@ -1,6 +1,7 @@
 #include "../utils/logger.cuh"
 #include "../defs.cuh"
 #include "../LAP-cpu/hungarian-algorithm-cpp/Hungarian.h"
+#include "../utils/cuda_utils.cuh"
 #include <cmath>
 #include <omp.h>
 #include <thread>
