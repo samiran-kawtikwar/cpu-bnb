@@ -77,7 +77,7 @@ bool feas_check(const problem_info *pinfo, node &node)
   return feasible;
 }
 
-void feas_check_parallel(const problem_info *pinfo, std::vector<node> &nodes, std::vector<bool> feasible)
+void feas_check_parallel(const problem_info *pinfo, std::vector<node> &nodes, std::vector<bool> &feasible)
 {
   uint level = nodes[0].value->level - 1;
   const uint N = pinfo->psize, K = pinfo->ncommodities;
@@ -94,8 +94,6 @@ void feas_check_parallel(const problem_info *pinfo, std::vector<node> &nodes, st
     {
       for (uint k = 0; k < K; k++)
       {
-        if (!feasible[ch_id])
-          continue;
         int *row_fa = nodes[ch_id].value->fixed_assignments;
         double used_budget = 0;
         // Update lap_costs_fa according to fixed assignments
@@ -118,7 +116,7 @@ void feas_check_parallel(const problem_info *pinfo, std::vector<node> &nodes, st
         }
         HungarianAlgorithm HungAlgo;
         HungAlgo.assignmentoptimal(row_assignments, &used_budget, lap_costs_fa, int(N), int(N));
-        if (used_budget > budgets[k])
+        if (used_budget > float(budgets[k]))
         {
           local_feasible[ch_id * K + k] = false;
         }
