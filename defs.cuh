@@ -73,7 +73,18 @@ struct node
   void print(const char *message, Args... args)
   {
     printf(message, args...);
-    Log<nun>(info, "Key: %f, level: %u\n", key, value->level);
+    Log<nun>(info, "Key: %f, level: %u\t", key, value->level);
+  }
+  template <typename... Args>
+  void print(const uint psize, const char *message, Args... args)
+  {
+    printf(message, args...);
+    Log<nun>(info, "Key: %f, level: %u\t", key, value->level);
+    // print fixed assignments
+    printf("FA: ");
+    for (uint i = 0; i < psize; i++)
+      printf("%d ", value->fixed_assignments[i]);
+    printf("\n");
   }
 };
 
