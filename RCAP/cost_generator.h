@@ -168,7 +168,8 @@ T *get_budgets(T *weights, Config config)
 template <typename T>
 problem_info *generate_problem(Config config, int seed = 45345)
 {
-  problem_info *info = new problem_info();
+  problem_info *info = nullptr;
+  CUDA_RUNTIME(cudaMallocManaged((void **)&info, sizeof(problem_info)));
   info->costs = generate_cost<T>(config, seed);
   info->weights = generate_weights<T>(config, seed);
   info->budgets = get_budgets<T>(info->weights, config);

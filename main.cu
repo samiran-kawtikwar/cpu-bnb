@@ -203,7 +203,7 @@ int main(int argc, char **argv)
   CUDA_RUNTIME(cudaFree(d_feas_space));
   CUDA_RUNTIME(cudaFree(d_children));
 
-  delete h_problem_info;
+  CUDA_RUNTIME(cudaFree(h_problem_info));
   while (!heap.empty())
   {
     delete heap.top().value;
