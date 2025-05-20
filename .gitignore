@@ -47,4 +47,3 @@ scratch/**
 *.log
 *.json
 valgrind-cuda.supp
-LAP-cpu/**
