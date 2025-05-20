@@ -22,7 +22,7 @@ int main(int argc, char **argv)
   Config config = parseArgs(argc, argv);
 
   problem_info *h_problem_info = generate_problem(config, config.seed);
-  print(h_problem_info, true, true);
+  print(h_problem_info, false, false);
   printConfig(config);
   size_t psize = h_problem_info->N;
   cost_type UB = h_problem_info->opt_objective;
