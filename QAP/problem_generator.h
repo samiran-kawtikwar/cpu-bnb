@@ -6,7 +6,6 @@
 
 #include "config.h"
 #include "problem_info.h"
-#include "gurobi_solver.h"
 #include "../utils/timer.h"
 #include "../utils/logger.cuh"
 #include "../defs.cuh"
@@ -57,44 +56,12 @@ template <typename cost_type = uint>
 problem_info *generate_problem(Config &config, const int seed = 45345)
 {
   size_t user_n = config.user_n;
-  double frac = 10;
-
   problem_info *info = new problem_info(user_n);
   cost_type *distances, *flows;
 
   if (config.problemType == generated)
   {
-    info->N = user_n;
-    distances = new cost_type[user_n * user_n];
-    flows = new cost_type[user_n * user_n];
-    if (user_n > 50)
-    {
-      Log(critical, "Problem size too large, Implementation not ready yet. Use problem size <= 50");
-      exit(-1);
-    }
-    // Generate random distances and flows
-    default_random_engine generator(seed);
-    generator.discard(1);
-    uniform_int_distribution<cost_type> distribution(0, frac * user_n - 1);
-    for (size_t i = 0; i < user_n; i++)
-    {
-      for (size_t j = 0; j < user_n; j++)
-      {
-        if (i == j)
-        {
-          distances[user_n * i + j] = 0;
-          flows[user_n * i + j] = 0;
-        }
-        else
-        {
-          distances[user_n * i + j] = (cost_type)distribution(generator);
-          flows[user_n * i + j] = (cost_type)distribution(generator);
-        }
-      }
-    }
-
-    // solve the problem to get the optimal objective
-    info->opt_objective = solve_with_gurobi(distances, flows, user_n);
+    Log(critical, "Generated problem tyoe not supported on this branch");
   }
   else if (config.problemType == qaplib)
   {
