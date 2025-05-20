@@ -32,11 +32,11 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
-  problem_info *h_problem_info = generate_problem<cost_type>(config, config.seed);
-  // print(h_problem_info, true, true, false);
+  problem_info *pinfo = generate_problem<cost_type>(config, config.seed);
+  // print(pinfo, true, true, false);
 
   Timer t = Timer();
-  cost_type UB = solve_with_gurobi<cost_type, weight_type>(h_problem_info->costs, h_problem_info->weights, h_problem_info->budgets, psize, ncommodities);
+  cost_type UB = solve_with_gurobi<cost_type, weight_type>(pinfo->costs, pinfo->weights, pinfo->budgets, psize, ncommodities);
   Log(info, "RCAP solved with GUROBI: objective %u\n", (uint)UB);
   Log(info, "Time taken by Gurobi: %f sec", t.elapsed());
 
@@ -66,7 +66,7 @@ int main(int argc, char **argv)
   root_info->LB = 0;
   root_info->level = 0;
   node root = node(0, root_info);
-  root.key = update_bounds_subgrad(h_problem_info, root, UB);
+  root.key = update_bounds_subgrad(pinfo, root, UB);
   if (root.key <= UB)
     heap.push(root);
   else
@@ -127,12 +127,12 @@ int main(int argc, char **argv)
       children[i].value = child_info;
       feasible[i] = true;
     }
-    // feas_check_parallel(h_problem_info, children, feasible);
-    feas_check_gpu(h_problem_info, psize - level, children, feasible, d_children, d_feas_space, dev_);
+    // feas_check_parallel(pinfo, children, feasible);
+    feas_check_gpu(pinfo, psize - level, children, feasible, d_children, d_feas_space, dev_);
     // copy row_fa from feasibility space to subgrad space
     for (uint i = 0; i < psize - level; i++)
       CUDA_RUNTIME(cudaMemcpy(d_subgrad_space[i].row_fa, d_feas_space[i].row_fa, sizeof(int) * psize, cudaMemcpyDeviceToDevice));
-    update_bounds_subgrad_gpu(h_problem_info, psize - level,
+    update_bounds_subgrad_gpu(pinfo, psize - level,
                               children, d_children,
                               d_subgrad_space, feasible, UB, dev_);
 
@@ -203,7 +203,7 @@ int main(int argc, char **argv)
   CUDA_RUNTIME(cudaFree(d_feas_space));
   CUDA_RUNTIME(cudaFree(d_children));
 
-  CUDA_RUNTIME(cudaFree(h_problem_info));
+  CUDA_RUNTIME(cudaFree(pinfo));
   while (!heap.empty())
   {
     delete heap.top().value;
