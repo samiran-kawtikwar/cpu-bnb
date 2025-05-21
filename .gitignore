@@ -46,3 +46,4 @@ results/**
 # log/environment files
 *.log
 *.json
+valgrind-cuda.supp
