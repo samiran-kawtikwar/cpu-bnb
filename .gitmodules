@@ -1,4 +1,0 @@
-[submodule "LAP-cpu/hungaraian-algorithm-cpp"]
-	path = LAP-cpu/hungaraian-algorithm-cpp
-	url = https://github.com/samiran-kawtikwar/hungarian-algorithm-cpp-fork.git
-	branch = master
