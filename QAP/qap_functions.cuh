@@ -140,7 +140,7 @@ cost_type update_bounds_GL(const problem_info &pinfo, node &node, TLAP<cost_type
   CUDA_RUNTIME(cudaMemcpyAsync(dla, la, N * sizeof(int), cudaMemcpyHostToDevice, handle->stream));
   CUDA_RUNTIME(cudaStreamSynchronize(handle->stream));
 
-  execKernelStream(populate_costs<cost_type>, N * N, BlockSize, handle->stream, false, N, dfa, dla, dist, flows, th);
+  execKernelStream(populate_costs<cost_type>, N * N, BSize, handle->stream, false, N, dfa, dla, dist, flows, th);
   // printDeviceArray<cost_type>(th.objective, N * N, "Objectives");
   for (uint i = 0; i < N; i++)
   {

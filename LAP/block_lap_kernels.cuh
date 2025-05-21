@@ -15,7 +15,7 @@ __forceinline__ __device__
 
 __device__ __forceinline__ void sync(TILE tile)
 {
-#if TileSize == BlockSize
+#if TileSize == BSize
   __syncthreads();
 #elif TileSize == WARP_SIZE
   __syncwarp();
@@ -41,12 +41,12 @@ __forceinline__ __device__ float tileReduce(TILE tile, float value, Op operation
   value = WR(temp_storage[tile.meta_group_rank()]).Reduce(value, operation);
   return value;
 }
-#elif TileSize == BlockSize
+#elif TileSize == BSize
 template <typename Op>
 __forceinline__ __device__ float tileReduce(TILE tile, float value, Op operation)
 {
   // perform blockReduce with cub
-  typedef cub::BlockReduce<float, BlockSize> BR;
+  typedef cub::BlockReduce<float, BSize> BR;
   __shared__ typename BR::TempStorage temp_storage;
   value = BR(temp_storage).Reduce(value, operation);
   return value;

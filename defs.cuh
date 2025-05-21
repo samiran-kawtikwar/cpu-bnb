@@ -11,9 +11,9 @@
 typedef unsigned long long int uint64;
 typedef unsigned int uint;
 
-#define BlockSize 64U
+#define BSize 64U
 #define TileSize 64U
-#define TilesPerBlock (BlockSize / TileSize)
+#define TilesPerBlock (BSize / TileSize)
 #define TILE cg::thread_block_tile<TileSize>
 
 struct node_info
